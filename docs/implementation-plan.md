@@ -282,6 +282,11 @@ vault/
 │   └── Chronolog.md
 └── .lionnotes.toml             # LionNotes config
 ```
+1. **Link validation**: Script to check all `[[wikilinks]]` resolve to actual files
+2. **Tag consistency**: Verify tag taxonomy is consistently applied
+3. **Graph connectivity**: Ensure no orphan notes exist
+4. **Accessibility**: Ensure alt-text on images, clear heading hierarchy (WCAG)
+5. **License compliance**: Ensure all content remains compatible with the repository's CC0 1.0 Universal (public domain dedication) license
 
 ---
 
