@@ -155,7 +155,7 @@ Create or manage Points of Interest:
 - Creates a numbered POI note in `POI/{subject}/`
 - Auto-links from the subject's SMOC
 - `--continue POI_NUM`: Append to an existing POI (sequence continuation)
-- POI frontmatter: `poi_number`, `subject`, `title`, `date`, `sequence_mark`
+- POI frontmatter: `poi_number`, `subject`, `title`, `date`, `sequence_page`
 
 ### `lionnotes chrono [CONTENT]`
 Add a chronolog entry:
