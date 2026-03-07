@@ -1,18 +1,40 @@
-# Implementation Plan: LionNotes as an Obsidian Vault
+# Implementation Plan: LionNotes — Thought Mapping Tooling for Obsidian
 
 ## Overview
 
-Build the revised "How to Make a Complete Map of Every Thought You Think" as a
-fully-linked Obsidian vault, using programmatic tooling (Python/shell scripts)
-to generate the vault structure, frontmatter, wikilinks, and tags. The vault
-will be both a readable digital book and a living demonstration of the
-methodology it teaches.
+Build a **Python CLI + MCP server** that implements Lion Kimbro's thought mapping
+methodology (from "How to Make a Complete Map of Every Thought You Think") as
+collaborative tooling for a person and LLM to maintain a memory system in an
+Obsidian vault. The tooling wraps the **official Obsidian CLI (v1.12+)** for all
+vault operations.
 
-Since we're in a headless environment (no Obsidian desktop app), we'll generate
-the vault as plain Markdown files with Obsidian conventions. The official
-Obsidian CLI (v1.12+) requires a running desktop instance, so our tooling will
-be **file-based vault generation scripts** that produce a vault any user can
-open in Obsidian.
+This is not a digitization of the book — it is an implementation of the *system*
+the book describes, modernized for digital use.
+
+---
+
+## Core Concepts → Digital Equivalents
+
+| Kimbro Concept | Digital Implementation | CLI Command |
+|---|---|---|
+| **Speed Thoughts** (pan-subject & subject) | Quick-capture notes with subject/hint/content fields | `lionnotes capture` |
+| **Subject Map of Contents (SMOC)** | Auto-generated MOC notes per subject with wikilinks | `lionnotes map` |
+| **Grand Subject MOC (GSMOC)** | Root MOC note linking all subjects, auto-maintained | `lionnotes gsmoc` |
+| **Points of Interest (POI)** | Long-form notes within a subject, numbered & titled | `lionnotes poi` |
+| **Purpose & Principles (P&P)** | Frontmatter `includes`/`excludes` + boundary note per subject | `lionnotes pp` |
+| **Subject Registry (GSR)** | Structured index of all subjects with metadata | `lionnotes subjects` |
+| **Caches / Binders** | Vault folders: carry-about, common-store, archive | `lionnotes cache` |
+| **Speed→Map→POI flow** | Review workflow: triage speeds, place on maps, expand to POIs | `lionnotes review` |
+| **Chronolog** | Daily/periodic timestamped entries per subject | `lionnotes chrono` |
+| **Late Binding** | Create stubs, defer structure; don't over-organize early | built into all commands |
+| **4-Color System** | Obsidian callouts: `[!note]` blue, `[!tip]` green, `[!warning]` red, `[!abstract]` structural | `lionnotes color` |
+| **Abbreviations/Shorthand (A/S)** | Per-subject and global alias definitions in frontmatter | `lionnotes alias` |
+| **Out Cards** | Redirect notes that point to where content moved | automatic on move |
+| **Transcription checkoff** | Frontmatter `mapped: true/false` on speed notes | `lionnotes review` |
+| **References (REF)** | Reference notes with structured citation metadata | `lionnotes ref` |
+| **Index** | Late-bound keyword→note index, built on demand | `lionnotes index` |
+| **Strategy (stickies)** | Frontmatter `priority` field + `#strategy` tag on active items | `lionnotes strategy` |
+| **Unplaced** | Proto-subjects folder for notes not yet assigned | `lionnotes unplaced` |
 
 ---
 
@@ -22,168 +44,244 @@ open in Obsidian.
 LionNotes/
 ├── original/book.txt              # Source material (existing)
 ├── docs/                          # Project docs (existing)
-├── scripts/                       # Vault generation tooling
-│   ├── generate_vault.py          # Main vault generator
-│   ├── parse_source.py            # Parse original book into sections
-│   └── templates/                 # Frontmatter/note templates
-├── vault/                         # Generated Obsidian vault
-│   ├── .obsidian/                 # Vault config (themes, plugins)
-│   │   ├── app.json
-│   │   ├── appearance.json
-│   │   └── core-plugins.json
-│   ├── 00 - Front Matter/
-│   │   ├── Index.md               # SMOC (Subject Map of Contents)
-│   │   ├── About This Revision.md
-│   │   └── How to Use This Vault.md
-│   ├── 01 - Introduction/
-│   │   ├── Introduction.md
-│   │   └── Psychological Impact Warning.md
-│   ├── 02 - Materials/
-│   │   ├── Materials.md           # Revised: digital equivalents
-│   │   └── Recommended Tools.md   # NEW (per PRD 4.2)
-│   ├── 03 - General Principles/
-│   │   ├── General Principles.md
-│   │   ├── Late Binding.md        # Key concept, standalone note
-│   │   └── Speed Habits.md
-│   ├── 04 - Intra-Subject Architecture/
-│   │   ├── Intra-Subject Architecture.md
-│   │   ├── Caches.md
-│   │   ├── Chronologs.md
-│   │   └── Diagrams and Visual Thinking.md
-│   ├── 05 - Extra-Subject Architecture/
-│   │   ├── Extra-Subject Architecture.md
-│   │   ├── Subject Map of Contents.md  # SMOC deep-dive
-│   │   └── Backlinks and Graph Navigation.md  # NEW
-│   ├── 06 - Theory of Notebooks/
-│   │   ├── Theory of Notebooks.md
-│   │   └── Digital Adaptation.md  # NEW
-│   ├── 07 - The Question of Computers/
-│   │   ├── The Question of Computers.md
-│   │   ├── Markdown and Tags.md         # NEW (per PRD 4.1)
-│   │   ├── ERDs and Knowledge Graphs.md # NEW (per PRD 4.1)
-│   │   └── LLM Integration.md          # NEW (per PRD 4.1)
-│   ├── 08 - Getting Started/
-│   │   ├── Getting Started.md
-│   │   └── Migration Path.md     # NEW (from Commentary)
-│   ├── 09 - New Sections/
-│   │   ├── Mindmaps and Knowledge Graphs.md  # NEW (per PRD 4.2)
-│   │   ├── Privacy Considerations.md         # NEW (from Commentary)
-│   │   ├── Data Portability.md               # NEW (from Commentary)
-│   │   └── Collaboration.md                  # NEW (from Commentary)
-│   ├── Concepts/                  # Atomic concept notes (Zettelkasten-style)
-│   │   ├── SMOC.md
-│   │   ├── Late Binding.md
-│   │   ├── Speed Habits.md
-│   │   ├── Cache.md
-│   │   ├── Chronolog.md
-│   │   ├── Out Card.md
-│   │   ├── Category Bins.md
-│   │   └── ...
-│   ├── Templates/                 # Obsidian templates
-│   │   ├── Chapter Template.md
-│   │   ├── Concept Template.md
-│   │   └── Commentary Template.md
-│   └── Attachments/               # For diagrams, images
-└── README.md                      # (if needed)
+├── src/
+│   └── lionnotes/
+│       ├── __init__.py
+│       ├── cli.py                 # Typer CLI entrypoint
+│       ├── obsidian.py            # Obsidian CLI wrapper (subprocess calls)
+│       ├── vault.py               # Vault state: subjects, registry, config
+│       ├── capture.py             # Speed thought capture
+│       ├── subjects.py            # Subject CRUD, P&P, GSMOC
+│       ├── maps.py                # SMOC generation & updating
+│       ├── review.py              # Speed→Map→POI triage workflow
+│       ├── chrono.py              # Chronolog operations
+│       ├── templates.py           # Note templates (speed, POI, P&P, etc.)
+│       ├── strategy.py            # Priority/strategy management
+│       ├── mcp_server.py          # MCP server exposing tools for LLMs
+│       └── config.py              # LionNotes config (vault path, etc.)
+├── pyproject.toml                 # Package config (Typer, MCP SDK deps)
+├── tests/
+│   ├── test_capture.py
+│   ├── test_subjects.py
+│   ├── test_maps.py
+│   ├── test_review.py
+│   └── ...
+└── CLAUDE.md
 ```
 
 ---
 
-## Implementation Steps
+## Obsidian CLI Integration (`obsidian.py`)
 
-### Phase 1: Source Parsing (`scripts/parse_source.py`)
+All vault I/O goes through the Obsidian CLI. This module wraps it:
 
-Parse `original/book.txt` into structured sections:
+```python
+class ObsidianCLI:
+    """Wrapper around `obsidian` CLI (v1.12+)."""
 
-1. Split by section dividers (`---...---` patterns around titles)
-2. Extract chapter content between dividers
-3. Identify key concepts (SMOC, Late Binding, Speed Habits, Caches, etc.)
-4. Identify internal cross-references in the text
-5. Output a structured JSON/dict representation of the book
+    def __init__(self, vault: str | None = None):
+        self.vault = vault  # None = most recently focused vault
 
-### Phase 2: Vault Scaffolding (`scripts/generate_vault.py`)
+    def read(self, file: str) -> str: ...
+    def create(self, name: str, content: str, template: str = None, silent: bool = True) -> None: ...
+    def append(self, file: str, content: str) -> None: ...
+    def search(self, query: str, path: str = None, limit: int = 20) -> list[str]: ...
+    def search_context(self, query: str, limit: int = 10) -> list[dict]: ...
+    def property_set(self, file: str, name: str, value: str) -> None: ...
+    def property_get(self, file: str, name: str) -> str: ...
+    def tags(self, sort: str = "count") -> list[str]: ...
+    def backlinks(self, file: str) -> list[str]: ...
+    def daily_read(self) -> str: ...
+    def daily_append(self, content: str) -> None: ...
+    def rename(self, file: str, new_name: str) -> None: ...  # auto-updates wikilinks
+```
 
-Generate the Obsidian vault structure:
+Key design decision: **All file operations go through the Obsidian CLI** so that
+wikilinks are automatically updated on renames/moves, the search index stays
+current, and the vault state is always consistent. No direct file manipulation.
 
-1. **Create `.obsidian/` config** with sensible defaults:
-   - Enable backlinks, graph view, tags, outgoing links, templates
-   - Set attachments folder
-   - Configure template folder location
+---
 
-2. **Generate chapter notes** from parsed source:
-   - YAML frontmatter: `title`, `tags`, `aliases`, `original_section`, `status`
-   - Convert plain text to proper Markdown (headings, lists, emphasis)
-   - Insert `[[wikilinks]]` for concept cross-references
-   - Add `#tags` for categorization using hierarchical scheme:
-     - `#chapter/introduction`, `#chapter/materials`, etc.
-     - `#concept/core`, `#concept/digital-adaptation`
-     - `#status/original`, `#status/revised`, `#status/new`
+## CLI Commands (`cli.py`)
 
-3. **Generate concept notes** (atomic notes for key ideas):
-   - Each major concept gets its own note in `Concepts/`
-   - Backlinks naturally form from chapter references
-   - Include: definition, original context, digital adaptation notes
+Built with [Typer](https://typer.tiangolo.com/). Installed as `lionnotes`.
 
-4. **Generate new section stubs** required by the PRD:
-   - Markdown and Tags guide
-   - ERDs and Knowledge Graphs
-   - LLM Integration
-   - Mindmaps and Knowledge Graphs
-   - Recommended Tools
+### `lionnotes init`
+Initialize a new LionNotes vault (or adopt an existing Obsidian vault):
+- Create folder structure: `Speeds/`, `Subjects/`, `POI/`, `Chrono/`, `Unplaced/`, `Archive/`, `References/`, `Templates/`
+- Create GSMOC note
+- Create Global A/S note
+- Create Subject Registry note
+- Store config in `.lionnotes.toml` at vault root
 
-5. **Generate the Index (SMOC)** as a digitized Subject Map of Contents:
-   - Links to all chapters and key concepts
-   - Serves as the vault's home page
-   - Demonstrates the SMOC concept itself (meta!)
+### `lionnotes capture [CONTENT]`
+Capture a speed thought (the core daily operation):
+- `--subject` / `-s`: Target subject (if known; omit for pan-subject)
+- `--hint` / `-h`: Context hint (1-3 words)
+- `--type` / `-t`: Thought type (observation, question, goal, problem, action, idea...)
+- If no `CONTENT` arg, opens `$EDITOR` or reads from stdin
+- Creates a speed note in `Speeds/{subject}/` with auto-incrementing number
+- If pan-subject (no `-s`), creates in `Speeds/_pan/` for later triage
+- Frontmatter: `speed_number`, `subject`, `hint`, `type`, `mapped: false`, `date`
 
-6. **Color system adaptation** (from Commentary):
-   - Map the 4-color pen system to Obsidian callout types:
-     - `> [!note]` (blue) → factual content
-     - `> [!tip]` (green) → actionable advice
-     - `> [!warning]` (orange) → cautions/caveats
-     - `> [!abstract]` (purple) → meta/structural notes
+### `lionnotes review`
+Interactive triage of unmapped speed thoughts:
+- `--subject` / `-s`: Review speeds for one subject (default: all)
+- `--pan`: Review pan-subject speeds and assign them to subjects
+- For each unmapped speed:
+  - Show content, hint, context
+  - Options: **map** (place on SMOC), **expand** (start a POI), **skip**, **archive**
+  - On map: add wikilink to subject's SMOC, mark `mapped: true`
+  - On expand: create new POI note, link from SMOC
 
-### Phase 3: Templates
+### `lionnotes subjects`
+Manage the subject taxonomy:
+- `lionnotes subjects list` — show all subjects with speed counts, last activity
+- `lionnotes subjects create NAME` — create a new subject (tab + SMOC + P&P stub)
+- `lionnotes subjects pp NAME` — view/edit Purpose & Principles for a subject
+- `lionnotes subjects merge SOURCE TARGET` — merge one subject into another
+- `lionnotes subjects split NAME` — interactive split of a subject into two
+- `lionnotes subjects promote` — promote an unplaced proto-subject to full subject
 
-Create Obsidian templates in `vault/Templates/`:
+### `lionnotes map [SUBJECT]`
+View or regenerate a Subject Map of Contents:
+- Without args: show the GSMOC
+- With subject: show/regenerate that subject's SMOC
+- `--rebuild`: Regenerate from all linked notes (useful after reorganization)
+- `--format json|text|graph`: Output format
 
-- **Chapter Template**: frontmatter skeleton + section structure
-- **Concept Template**: definition, context, digital adaptation, related
-- **Commentary Template**: for revision notes and editorial additions
+### `lionnotes poi SUBJECT TITLE`
+Create or manage Points of Interest:
+- Creates a numbered POI note in `POI/{subject}/`
+- Auto-links from the subject's SMOC
+- `--continue POI_NUM`: Append to an existing POI (sequence continuation)
+- POI frontmatter: `poi_number`, `subject`, `title`, `date`, `sequence_page`
 
-### Phase 4: Digital Adaptations
+### `lionnotes chrono [CONTENT]`
+Add a chronolog entry:
+- Appends timestamped entry to today's daily note or a subject chronolog
+- `--subject` / `-s`: Subject-specific chronolog (default: global daily)
 
-Write the new content sections identified in the PRD and Commentary:
+### `lionnotes ref SUBJECT TITLE`
+Add a reference:
+- `--url`, `--author`, `--year`, `--notes`
+- Creates a reference note in `References/{subject}/`
+- Auto-numbered, linked from subject's reference TOC
 
-1. **Recommended Tools** (`02 - Materials/Recommended Tools.md`)
-   - Obsidian, Logseq, Dendron, Notion
-   - Graph databases (Neo4j, Memgraph)
-   - LLM tools for note augmentation
+### `lionnotes strategy`
+Manage active priorities (the digital equivalent of stickies on the GSMOC):
+- `lionnotes strategy list` — show active strategy items
+- `lionnotes strategy add SUBJECT DESCRIPTION` — flag something as strategically active
+- `lionnotes strategy done ITEM` — remove a strategy flag
+- Renders as a special section at the top of the GSMOC
 
-2. **Markdown and Tags** (`07/.../Markdown and Tags.md`)
-   - Practical guide to Markdown syntax for thought mapping
-   - Tag taxonomy design for personal knowledge
+### `lionnotes search QUERY`
+Search the vault using Obsidian's index:
+- `--subject` / `-s`: Scope to a subject folder
+- `--context`: Show surrounding content (uses `search:context`)
+- `--speeds-only`: Only search speed notes
 
-3. **ERDs and Knowledge Graphs** (`07/.../ERDs and Knowledge Graphs.md`)
-   - How to visualize thought networks
-   - Obsidian graph view as a modern SMOC
-   - Export to graph databases
+### `lionnotes cache`
+Manage the carry-about / common-store / archive tiers:
+- `lionnotes cache status` — show which subjects are in which tier
+- `lionnotes cache promote SUBJECT` — move from archive to common-store
+- `lionnotes cache archive SUBJECT` — move from common-store to archive
 
-4. **LLM Integration** (`07/.../LLM Integration.md`)
-   - Using LLMs to process/query personal knowledge bases
-   - MCP servers for Obsidian (linking to ecosystem)
-   - Automated concept extraction and linking
+### `lionnotes index SUBJECT`
+Build or update a late-bound index for a subject:
+- Scans all notes in the subject for keywords
+- Creates/updates an `Index` note with keyword → note mappings
+- Only built when requested (late binding principle)
 
-5. **Mindmaps and Knowledge Graphs** (`09/.../Mindmaps and Knowledge Graphs.md`)
-   - Relationship between mind maps and Kimbro's maps
-   - Knowledge graph representations
+### `lionnotes alias`
+Manage abbreviations/shorthands:
+- `lionnotes alias set ABBR EXPANSION` — global or per-subject
+- `lionnotes alias list` — show all active aliases
+- Used by other commands to expand shorthands in display
 
-6. **Late Binding digital adaptation** (expand `Concepts/Late Binding.md`)
-   - Obsidian's alias and redirect capabilities
-   - When to auto-update vs. preserve the late-binding principle
+---
 
-### Phase 5: Validation & Polish
+## MCP Server (`mcp_server.py`)
 
+Exposes the same operations as [MCP tools](https://modelcontextprotocol.io/) so
+an LLM (Claude, etc.) can collaboratively operate the vault.
+
+Built with the [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk).
+
+### Tools exposed:
+
+| MCP Tool | Maps to CLI | Description |
+|---|---|---|
+| `capture_speed` | `lionnotes capture` | Capture a speed thought |
+| `list_subjects` | `lionnotes subjects list` | List all subjects |
+| `read_smoc` | `lionnotes map SUBJECT` | Read a subject's map of contents |
+| `read_gsmoc` | `lionnotes map` | Read the grand subject map |
+| `search_vault` | `lionnotes search` | Search the vault |
+| `read_note` | (obsidian read) | Read any note's content |
+| `review_unmapped` | `lionnotes review` | Get unmapped speeds for review |
+| `map_speed` | (part of review) | Place a speed thought on a SMOC |
+| `create_poi` | `lionnotes poi` | Create a point of interest |
+| `append_chrono` | `lionnotes chrono` | Add a chronolog entry |
+| `get_strategy` | `lionnotes strategy list` | Get active strategy items |
+| `set_strategy` | `lionnotes strategy add` | Flag something as strategically active |
+| `get_subject_pp` | `lionnotes subjects pp` | Read purpose & principles |
+| `add_reference` | `lionnotes ref` | Add a reference to a subject |
+| `build_index` | `lionnotes index` | Build a late-bound index |
+
+### Resources exposed:
+
+| MCP Resource | Description |
+|---|---|
+| `lionnotes://gsmoc` | Current GSMOC content |
+| `lionnotes://subjects` | Subject registry |
+| `lionnotes://strategy` | Active strategy items |
+| `lionnotes://speeds/{subject}` | Unmapped speeds for a subject |
+
+### Prompts exposed:
+
+| MCP Prompt | Description |
+|---|---|
+| `review_speeds` | Guide the LLM through reviewing unmapped speed thoughts |
+| `suggest_subjects` | Analyze captured thoughts and suggest subject categorizations |
+| `expand_to_poi` | Help expand a speed thought into a full POI |
+| `update_smoc` | Suggest SMOC reorganization based on new content |
+
+---
+
+## Vault Structure (generated by `lionnotes init`)
+
+```
+vault/
+├── GSMOC.md                    # Grand Subject Map of Contents (root note)
+├── Subject Registry.md         # Hash/index of all subjects
+├── Global Aliases.md           # Global abbreviations/shorthands
+├── Strategy.md                 # Active priorities (digital stickies)
+├── Speeds/
+│   ├── _pan/                   # Pan-subject speed thoughts (unsorted)
+│   └── {subject}/              # Per-subject speed thoughts
+├── Subjects/
+│   └── {subject}/
+│       ├── SMOC.md             # Subject Map of Contents
+│       └── P&P.md              # Purpose & Principles
+├── POI/
+│   └── {subject}/
+│       └── POI-{n} {title}.md  # Points of Interest
+├── Chrono/
+│   └── {YYYY-MM-DD}.md        # Daily chronolog
+├── References/
+│   └── {subject}/
+│       └── REF-{n} {title}.md  # Reference notes
+├── Unplaced/                   # Proto-subjects (not yet full subjects)
+├── Archive/                    # Archived/inactive subjects
+├── Templates/
+│   ├── Speed.md
+│   ├── POI.md
+│   ├── SMOC.md
+│   ├── P&P.md
+│   ├── Reference.md
+│   └── Chronolog.md
+└── .lionnotes.toml             # LionNotes config
+```
 1. **Link validation**: Script to check all `[[wikilinks]]` resolve to actual files
 2. **Tag consistency**: Verify tag taxonomy is consistently applied
 3. **Graph connectivity**: Ensure no orphan notes exist
@@ -192,70 +290,166 @@ Write the new content sections identified in the PRD and Commentary:
 
 ---
 
-## Tag Taxonomy
+## Frontmatter Schemas
 
-```
-#chapter/                    # Chapter tags
-  introduction, materials, general-principles,
-  intra-subject, extra-subject, theory,
-  computers, getting-started
-
-#concept/                    # Concept classification
-  core                       # Original key concepts
-  digital-adaptation         # New digital equivalents
-  methodology                # Process/method concepts
-
-#status/                     # Content status
-  original                   # Directly from source
-  revised                    # Updated from source
-  new                        # New content for revision
-  stub                       # Placeholder needing content
-
-#type/                       # Note type
-  chapter                    # Full chapter notes
-  concept                    # Atomic concept notes
-  guide                      # How-to/practical guides
-  commentary                 # Editorial notes
-```
-
----
-
-## Frontmatter Schema
-
+### Speed Thought
 ```yaml
 ---
-title: "Note Title"
-aliases:
-  - "Alternative Name"
-tags:
-  - chapter/introduction
-  - status/revised
-original_section: "INTRODUCTION"    # Maps to source
+type: speed
+speed_number: 47
+subject: "Personal Psychology"
+hint: "motivation decay"
+thought_type: observation  # observation, question, goal, problem, action, idea
+mapped: false
+date: 2026-03-07T14:23:00
+---
+```
+
+### POI
+```yaml
+---
+type: poi
+poi_number: 7
+subject: "Personal Psychology"
+title: "The Kitty Model"
+sequence_page: 1
 date_created: 2026-03-07
 date_modified: 2026-03-07
 ---
 ```
+
+### Subject SMOC
+```yaml
+---
+type: smoc
+subject: "Personal Psychology"
+version: 2
+speed_count: 140
+poi_count: 26
+last_activity: 2026-03-07
+---
+```
+
+### Purpose & Principles
+```yaml
+---
+type: pp
+subject: "Personal Psychology"
+version: 1
+includes:
+  - "Psychological forces"
+  - "Self-image"
+  - "Motivation"
+excludes:
+  - target: "Metaphysics"
+    items: ["Non-mechanical forces", "National forces"]
+  - target: "Values"
+    items: ["Values", "Goals"]
+---
+```
+
+### Reference
+```yaml
+---
+type: reference
+ref_number: 3
+subject: "Global Knowledge Infrastructure"
+title: "Towards High-Performance Organizations"
+author: "Douglas C Engelbart"
+year: 1992
+url: ""
+expanded: false
+---
+```
+
+---
+
+## Implementation Phases
+
+### Phase 1: Foundation
+- `pyproject.toml` with Typer + MCP SDK dependencies
+- `obsidian.py` — Obsidian CLI wrapper with error handling
+- `config.py` — `.lionnotes.toml` reader/writer
+- `templates.py` — note templates for all types
+- `lionnotes init` command
+- Basic tests for Obsidian CLI wrapper (mocked)
+
+### Phase 2: Core Capture Loop
+- `lionnotes capture` — speed thought capture (the most frequent operation)
+- `lionnotes chrono` — daily chronolog
+- `lionnotes subjects create` / `list`
+- `lionnotes search` — vault search
+- Integration tests with a test vault
+
+### Phase 3: Organization & Review
+- `lionnotes review` — triage unmapped speeds
+- `lionnotes map` — SMOC generation & viewing
+- `lionnotes poi` — POI creation
+- `lionnotes subjects pp` — Purpose & Principles
+- `lionnotes gsmoc` — GSMOC auto-generation
+- `lionnotes ref` — reference management
+
+### Phase 4: Advanced Features
+- `lionnotes strategy` — priority management
+- `lionnotes cache` — tier management (carry/common/archive)
+- `lionnotes index` — late-bound index generation
+- `lionnotes alias` — abbreviation management
+- `lionnotes subjects merge/split/promote`
+
+### Phase 5: MCP Server
+- MCP server with all tools from the table above
+- MCP resources for vault state
+- MCP prompts for guided LLM workflows
+- Integration with Claude Code via MCP config
+
+### Phase 6: Polish
+- Error handling and edge cases
+- `--help` documentation for all commands
+- Config validation
+- README with setup instructions
 
 ---
 
 ## Technology Choices
 
 | Concern | Choice | Rationale |
-|---------|--------|-----------|
-| Vault generation | Python scripts | Flexible, good string/file handling |
-| File format | Plain Markdown + YAML frontmatter | Native Obsidian format, fully portable |
-| Vault config | `.obsidian/` JSON files | Standard Obsidian config |
-| Source parsing | Python regex + structure detection | Book has consistent divider patterns |
-| Link validation | Python script | Check `[[...]]` patterns against filenames |
-| No runtime dependency on Obsidian | By design | Works headless, any user opens result in Obsidian |
+|---|---|---|
+| CLI framework | Typer | Pythonic, auto-help, type hints |
+| Vault I/O | Obsidian CLI (v1.12+) | Consistent index, auto-link updates, no corruption risk |
+| MCP server | `mcp` Python SDK | Official protocol, works with Claude Code |
+| Config format | TOML (`.lionnotes.toml`) | Standard, readable, Python stdlib in 3.11+ |
+| Package management | `pyproject.toml` + pip | Standard Python packaging |
+| Testing | pytest | Standard, good Typer/CLI testing support |
 
 ---
 
-## What We Are NOT Doing
+## Key Design Principles
 
-- **Not using the official Obsidian CLI** — it requires a running desktop app
-  instance; we're generating files that *any* Obsidian installation can open
-- **Not using MCP servers** — those also need a running Obsidian instance
-- **Not building an Obsidian plugin** — the vault itself is the deliverable
-- **Not auto-rewriting the entire book** — original text is preserved and
-  attributed; new sections are clearly marked as additions
+1. **Obsidian CLI as the only I/O layer** — never read/write vault files directly.
+   This ensures search indexes, backlinks, and wikilink resolution stay consistent.
+
+2. **Late binding everywhere** — don't force structure prematurely. Subjects start
+   as unplaced notes and graduate. SMOCs are generated on demand. Indexes are built
+   only when requested.
+
+3. **Same operations for human and LLM** — the MCP server exposes the exact same
+   operations as the CLI. The vault is the shared state. Either party can capture,
+   review, organize.
+
+4. **Speed of capture is paramount** — `lionnotes capture "thought"` must be
+   fast and frictionless. All categorization can happen later during review.
+
+5. **Vault is portable** — the vault is standard Obsidian markdown. LionNotes
+   tooling enhances it but doesn't lock it in. You can always use the vault
+   without LionNotes.
+
+---
+
+## What This Plan Does NOT Include
+
+- **Digitizing the book itself** — the original plan for converting book.txt into
+  vault content is a separate effort
+- **Obsidian plugin development** — we use the CLI, not the plugin API
+- **Graph database export** — possible future feature, not in scope
+- **Mobile support** — Obsidian CLI is desktop-only; mobile use would need a
+  different approach
