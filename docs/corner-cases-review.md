@@ -2,6 +2,7 @@
 
 Reviewed: `docs/kimbro-memory-architecture.md` and `docs/implementation-plan.md`
 Date: 2026-03-08
+Reconciliation update: 2026-03-08
 
 ---
 
@@ -16,6 +17,8 @@ Date: 2026-03-08
 
 **Recommendation:** Add a `lionnotes doctor` command that validates the environment (Obsidian running, CLI version, vault accessible). The `obsidian.py` wrapper needs explicit error handling strategy — at minimum, detect and report CLI failures rather than silently swallowing them.
 
+**Status: Partially addressed.** `lionnotes doctor` is now specified in the implementation plan (Phase 1). Error handling strategy for `obsidian.py` still needs detailed specification during implementation.
+
 ---
 
 ## 2. Speed Number Collisions and Gaps
@@ -28,6 +31,8 @@ Date: 2026-03-08
 - **Pan-subject to subject migration:** When a pan-subject speed is triaged to a subject, does it get renumbered in the subject's sequence, or keep its pan-subject number? The architecture doc and implementation plan differ — the architecture doc uses a single `speeds.md` file per subject (append-only), while the implementation plan uses individual speed note files in `Speeds/{subject}/`.
 
 **Recommendation:** Define a single numbering strategy. A monotonic counter stored in `.lionnotes.toml` per subject would be simplest. Document that numbers are never reused. Resolve the structural disagreement between the two documents (single file vs. individual files for speeds).
+
+**Status: Partially addressed.** The structural disagreement is resolved — both documents now use a single append-only `speeds.md` per subject. Per-subject speed counters in `.lionnotes.toml` are specified. Concurrent write semantics still need implementation-time design.
 
 ---
 
@@ -50,6 +55,8 @@ This is the largest gap. The two documents describe **different vault structures
 **Impact:** These are not cosmetic differences — they affect wikilink paths, CLI command targets, and the fundamental mental model. The architecture doc's self-contained subject folders are simpler to reason about. The implementation plan's split structure makes cross-subject queries easier but complicates subject moves/merges.
 
 **Recommendation:** Pick one. Document the rationale. The architecture doc's approach (everything in a subject folder) is more aligned with Kimbro's binder metaphor and makes `subjects merge/split` far simpler.
+
+**Status: RESOLVED.** Both documents now use self-contained subject folders (the architecture doc's approach). Each subject is a folder containing `SMOC.md`, `purpose.md`, `glossary.md`, `speeds.md`, `cheatsheet.md`, `POI-*.md`, `REF-*.md`, and `_archive/`. Global infrastructure uses underscore-prefixed folders: `_inbox/`, `_strategy/`, `_templates/`. Rationale: closer to Kimbro's binder metaphor, simpler merge/split, easier mental model.
 
 ---
 
@@ -76,6 +83,8 @@ This is the largest gap. The two documents describe **different vault structures
 
 **Recommendation:** Rename to `Purpose-and-Principles.md` or `PP.md`.
 
+**Status: RESOLVED.** Renamed to `purpose.md` in both documents. No shell-problematic characters.
+
 ---
 
 ## 6. The "Late Binding" Escape Hatch Can Lead to Permanent Chaos
@@ -87,6 +96,8 @@ This is the largest gap. The two documents describe **different vault structures
 - **Inbox zero never happens:** `_inbox/unsorted.md` / `Speeds/_pan/` accumulates pan-subject speeds. The `lionnotes review --pan` command exists, but nothing prompts the user/LLM to run it.
 
 **Recommendation:** Add soft triggers to the agent protocol: "If `Unplaced/` has more than N notes, suggest triage during session startup." "If pan-subject speeds exceed N, the session startup orientation should flag this." These aren't violations of late binding — they're demand signals.
+
+**Status: Partially addressed.** The operator protocol (Section 3.1) now includes soft trigger checks during session startup. `lionnotes doctor` will flag inbox accumulation and subjects with 30+ un-synthesized speeds. Specific numeric thresholds still need calibration during use.
 
 ---
 
@@ -101,6 +112,8 @@ This is the largest gap. The two documents describe **different vault structures
 - **Resource freshness:** MCP resources like `lionnotes://gsmoc` — are these cached? Live reads? If cached, what's the invalidation strategy?
 
 **Recommendation:** Define error behavior for each MCP tool. Add pagination parameters. Consider a `dry_run` parameter for mutating operations. Document whether resources are live or cached.
+
+**Status: Partially addressed.** The implementation plan's Phase 5 now explicitly includes error semantics and pagination parameters as deliverables. Detailed per-tool behavior still needs specification during implementation.
 
 ---
 
@@ -118,6 +131,8 @@ Additional gaps:
 
 **Recommendation:** Clarify whether the three-tier cache system (carry/common/archive) replaces the simple active/archive distinction, or layers on top of it. Define search behavior for each tier.
 
+**Status: Partially addressed.** Both documents now use per-subject `_archive/` subfolders (not a top-level `Archive/` folder). The `lionnotes cache` command manages carry-about/common-store/archive tiers using properties on the subject, while `_archive/` handles individual note archival within a subject. Search behavior per tier still needs specification.
+
 ---
 
 ## 9. Template Variable Resolution
@@ -129,6 +144,8 @@ Additional gaps:
 - **Template versioning:** If templates change after vault initialization, existing notes don't get updated. A v2 template with new frontmatter fields creates inconsistency with v1 notes.
 
 **Recommendation:** LionNotes should own template resolution (in `templates.py`), not rely on Obsidian's Templater plugin. Define required vs. optional template variables. Document that template changes are forward-only.
+
+**Status: Addressed in plan.** The implementation plan now specifies that `templates.py` owns variable resolution. Required/optional variable definitions and forward-only semantics still need specification during implementation.
 
 ---
 
@@ -206,26 +223,28 @@ This creates tension:
 
 **Recommendation:** Clarify the intended usage model. If LionNotes is the abstraction layer, then the architecture doc's raw CLI examples should be updated to use `lionnotes` commands (or MCP tools). The agent protocol from the architecture doc should be referenced in the implementation plan, perhaps as a "session startup" MCP prompt or as instructions embedded in the CLAUDE.md for vault-operating agents.
 
+**Status: RESOLVED.** The usage model is now "true peers" — human (CLI) and LLM (MCP) are co-equal operators of the vault. The architecture doc now shows both raw Obsidian CLI commands and their LionNotes/MCP equivalents. The implementation plan references the architecture doc's operator protocol and includes it in the MCP prompts deliverable (Phase 5). The architecture doc's title changed from "Agent Protocol" to "Operator Protocol" to reflect this.
+
 ---
 
 ## Summary
 
-| # | Corner Case | Severity | Effort to Fix |
-|---|---|---|---|
-| 1 | Obsidian CLI not running / wrong vault | High | Medium |
-| 2 | Speed number collisions | Medium | Low |
-| 3 | **Structural disagreement between docs** | **High** | **Medium** |
-| 4 | SMOC/GSMOC staleness | Medium | Medium |
-| 5 | `P&P.md` ampersand in filename | Low | Trivial |
-| 6 | Late binding without triggers | Medium | Low |
-| 7 | MCP error semantics / pagination | Medium | Medium |
-| 8 | Archive semantics underspecified | Medium | Low |
-| 9 | Template variable resolution | Low | Low |
-| 10 | Multi-agent concurrency | High | High |
-| 11 | Subject naming constraints | Medium | Low |
-| 12 | Bulk move transaction safety | Medium | Medium |
-| 13 | Daily notes / chronolog ambiguity | Low | Low |
-| 14 | Search bootstrap problem | Medium | Low |
-| 15 | **Docs target different users** | **High** | **Medium** |
+| # | Corner Case | Severity | Effort to Fix | Status |
+|---|---|---|---|---|
+| 1 | Obsidian CLI not running / wrong vault | High | Medium | Partially addressed (`doctor` command) |
+| 2 | Speed number collisions | Medium | Low | Partially addressed (counters in `.lionnotes.toml`) |
+| 3 | ~~Structural disagreement between docs~~ | ~~High~~ | ~~Medium~~ | **RESOLVED** — self-contained subject folders |
+| 4 | SMOC/GSMOC staleness | Medium | Medium | Open |
+| 5 | ~~`P&P.md` ampersand in filename~~ | ~~Low~~ | ~~Trivial~~ | **RESOLVED** — renamed to `purpose.md` |
+| 6 | Late binding without triggers | Medium | Low | Partially addressed (soft triggers in protocol) |
+| 7 | MCP error semantics / pagination | Medium | Medium | Partially addressed (in Phase 5 scope) |
+| 8 | Archive semantics underspecified | Medium | Low | Partially addressed (per-subject `_archive/`) |
+| 9 | Template variable resolution | Low | Low | Addressed in plan (`templates.py` owns resolution) |
+| 10 | Multi-agent concurrency | High | High | Open (deferred, out of initial scope) |
+| 11 | Subject naming constraints | Medium | Low | Open |
+| 12 | Bulk move transaction safety | Medium | Medium | Open |
+| 13 | Daily notes / chronolog ambiguity | Low | Low | Open |
+| 14 | Search bootstrap problem | Medium | Low | Open |
+| 15 | ~~Docs target different users~~ | ~~High~~ | ~~Medium~~ | **RESOLVED** — co-equal peers model |
 
-The two highest-priority items are **#3** (the documents describe different vault structures) and **#15** (the documents target different usage models). These should be resolved before implementation begins, as they affect every subsequent design decision.
+The two previously highest-priority items (**#3** and **#15**) are now resolved. Remaining high-severity items are **#10** (multi-agent concurrency, deferred) and **#1** (partially addressed). The remaining open items (#4, #11, #12, #13, #14) should be resolved during implementation.
