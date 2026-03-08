@@ -16,4 +16,7 @@ def test_version_flag():
 
 def test_no_args_shows_help():
     result = runner.invoke(app, [])
+    # Typer/Click returns exit code 2 for no_args_is_help (usage message)
+    assert result.exit_code == 2
     assert "Thought mapping" in result.output
+    assert "Usage" in result.output
