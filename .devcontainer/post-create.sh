@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "==> Installing uv"
-curl -LsSf https://astral.sh/uv/install.sh | sh
+UV_VERSION="0.7.12"
+
+echo "==> Installing uv ${UV_VERSION}"
+curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
 export PATH="$HOME/.local/bin:$PATH"
 
-echo "==> Creating venv and installing project"
+echo "==> Creating venv and installing project + dev deps"
 uv venv
-uv pip install -e ".[dev]" 2>/dev/null || uv pip install -e .
-uv pip install pytest pytest-cov ruff
+uv sync --dev
 
 echo "==> Verifying install"
 .venv/bin/python -c "import lionnotes; print(f'lionnotes {lionnotes.__version__} installed')"
-.venv/bin/pytest --co -q 2>/dev/null && echo "Test collection OK" || echo "No tests collected yet"
+
+# Exit code 5 = no tests collected (OK during initial setup); other failures should surface
+.venv/bin/pytest --co -q
+echo "Test collection OK"
 
 echo ""
 echo "========================================="

@@ -8,8 +8,7 @@ LionNotes is a Python CLI + MCP server that implements the thought mapping metho
 
 - **Python 3.11+**, managed with **uv**
 - Open in VS Code / Codespaces via `.devcontainer/` for a batteries-included setup
-- `uv venv && uv pip install -e .` for local development
-- `uv pip install pytest pytest-cov ruff` for dev tools
+- `uv venv && uv sync --dev` for local development (installs project + dev tools)
 - Run tests: `pytest`
 - Lint: `ruff check src/ tests/`
 - Format: `ruff format src/ tests/`
