@@ -119,15 +119,11 @@ This is the largest gap. The two documents **previously** described different va
 
 ## 8. Archive Semantics Are Underspecified
 
-**Corner case:** Both documents mention archiving but define it differently:
+**Corner case:** Both documents now agree on per-subject `{subject}/_archive/` subfolders for note archival. Remaining gaps:
 
-- Architecture doc: `_archive/` subfolder within each subject, or `archived: true` property.
-- Implementation plan: Top-level `Archive/` folder.
-
-Additional gaps:
-- **Does archived content appear in search results?** If yes, it pollutes results. If no, knowledge is lost.
-- **Can archived notes be un-archived?** The `cache promote` command suggests yes, but `archive` and `cache` seem to be conflated.
-- **Archive vs. cache tiers:** The implementation plan introduces carry-about/common-store/archive tiers (from Kimbro) but the architecture doc only has active/archive. These are different systems.
+- **Does archived content appear in search results?** If yes, it pollutes results. If no, knowledge is lost. The `lionnotes search` command needs a `--include-archived` flag or similar.
+- **Can archived notes be un-archived?** `lionnotes cache promote` moves notes from `{subject}/_archive/` back to active, so yes.
+- **Archive vs. cache tiers:** The `lionnotes cache` command manages subject-level tiers (carry-about/common-store/archive via properties on the subject), while `{subject}/_archive/` handles individual note archival within a subject. These are complementary but the relationship needs clearer documentation.
 
 **Recommendation:** Clarify whether the three-tier cache system (carry/common/archive) replaces the simple active/archive distinction, or layers on top of it. Define search behavior for each tier.
 
@@ -190,13 +186,13 @@ Additional gaps:
 
 ## 13. Daily Notes Ambiguity
 
-**Corner case:** The architecture doc uses `obsidian daily:read` and `obsidian daily:append`. The implementation plan has `Chrono/{YYYY-MM-DD}.md`.
+**Corner case:** The architecture doc uses `obsidian daily:read` and `obsidian daily:append`. The implementation plan's `lionnotes chrono` delegates to Obsidian's daily notes for global entries.
 
-- **Are these the same thing?** Obsidian's daily notes feature creates notes in a configured folder with a configured date format. The implementation plan's `Chrono/` folder may or may not match.
-- **Timezone:** `YYYY-MM-DD` — whose timezone? The server's? The user's configured timezone? An LLM agent doesn't have an inherent timezone.
-- **Daily note template:** Obsidian has its own daily note template. LionNotes has a `Chronolog.md` template. Conflict?
+- **Are these the same thing?** Yes — `lionnotes chrono` without `--subject` uses `obsidian daily:append`, which creates/appends to Obsidian's configured daily note. With `--subject`, it appends to the subject's speed page instead.
+- **Timezone:** `YYYY-MM-DD` — whose timezone? The server's? The user's configured timezone? An LLM agent doesn't have an inherent timezone. This needs a decision (see recommendation).
+- **Daily note template:** LionNotes defers to Obsidian's built-in daily note template for global daily notes. No conflict since LionNotes doesn't manage the daily note template.
 
-**Recommendation:** Decide whether to use Obsidian's built-in daily notes or LionNotes' own chronolog system. If both, document how they relate. Specify timezone handling (use vault's configured timezone or UTC).
+**Recommendation:** Use Obsidian's built-in daily notes (via `obsidian daily:*` commands) for global chronolog entries. Document that timezone follows the host machine's timezone (since Obsidian CLI runs locally). Add a `timezone` field to `.lionnotes.toml` for explicit override if needed.
 
 ---
 
@@ -243,7 +239,7 @@ This creates tension:
 | 10 | Multi-agent concurrency | High | High | Open (deferred, out of initial scope) |
 | 11 | Subject naming constraints | Medium | Low | Open |
 | 12 | Bulk move transaction safety | Medium | Medium | Open |
-| 13 | Daily notes / chronolog ambiguity | Low | Low | Open |
+| 13 | Daily notes / chronolog ambiguity | Low | Low | Partially addressed (chrono uses Obsidian daily notes) |
 | 14 | Search bootstrap problem | Medium | Low | Open |
 | 15 | ~~Docs target different users~~ | ~~High~~ | ~~Medium~~ | **RESOLVED** — co-equal peers model |
 

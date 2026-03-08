@@ -115,11 +115,15 @@ Initialize a new LionNotes vault (or adopt an existing Obsidian vault):
 - Store config in `.lionnotes.toml` at vault root
 
 ### `lionnotes doctor`
-Validate the LionNotes environment:
+Validate the LionNotes environment and flag maintenance needs:
 - Check Obsidian is running and CLI version is v1.12+
 - Verify vault is accessible and `.lionnotes.toml` exists
 - Report SMOC/GSMOC inconsistencies (orphan links, missing entries)
 - Check for unresolved template variables in notes
+- **Soft triggers** (non-blocking warnings):
+  - `_inbox/unsorted.md` has accumulated entries → suggest triage
+  - Any subject has 30+ unmapped speed entries → suggest synthesis
+  - Subjects on `_strategy/maintenance-queue.md` → remind about pending reorg
 
 ### `lionnotes capture [CONTENT]`
 Capture a speed thought (the core daily operation):
@@ -130,7 +134,8 @@ Capture a speed thought (the core daily operation):
 - If subject is specified, appends to `{subject}/speeds.md`
 - If pan-subject (no `-s`), appends to `_inbox/unsorted.md` for later triage
 - Each speed page (`speeds.md`) has frontmatter: `type: speeds`, `subject`, `entry_count`, `last_entry`
-- Each entry within the page follows the format: `- S[N]: (context: hint) content #thought/type [mapped: POI-N | unmapped]`
+- Each entry within the page follows the format: `- S[N]: (context: hint) content #thought/type`
+- Mapped entries are suffixed with `[→ POI-N]` (e.g., `[→ POI-07]`); unmapped entries have no suffix
 
 ### `lionnotes review`
 Interactive triage of unmapped speed thoughts:
@@ -169,6 +174,7 @@ Create or manage Points of Interest:
 Add a chronolog entry:
 - Appends timestamped entry to today's daily note or a subject's speed page
 - `--subject` / `-s`: Subject-specific entry (default: global daily note via `obsidian daily:append`)
+- Timestamps use the host machine's local timezone (Obsidian CLI runs locally). Override via `timezone` in `.lionnotes.toml` if needed
 
 ### `lionnotes ref SUBJECT TITLE`
 Add a reference:

@@ -186,7 +186,7 @@ This is the most important maintenance operation. When a subject accumulates man
 2. Identify clusters of related thoughts
 3. Create a new POI synthesizing the cluster
 4. Update the SMOC to include the new POI
-5. Mark synthesized speed entries (prefix with `[→ POI-N]`)
+5. Mark synthesized speed entries by appending `[→ POI-N]` (e.g., `[→ POI-12]`)
 
 ```bash
 # Raw Obsidian CLI
