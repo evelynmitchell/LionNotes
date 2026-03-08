@@ -12,7 +12,7 @@ LionNotes is a Python CLI + MCP server that implements the thought mapping metho
 - Run tests: `pytest`
 - Lint: `ruff check src/ tests/`
 - Format: `ruff format src/ tests/`
-- The Obsidian CLI (v1.12+) requires a running Obsidian desktop instance on the host. Unit tests mock all CLI calls.
+- The Obsidian CLI (v1.12+) requires a running Obsidian desktop instance on the host. When Obsidian CLI integration is added, unit tests will mock all CLI calls.
 
 ## Workflow Rules
 

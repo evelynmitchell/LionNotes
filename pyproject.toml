@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Thought mapping tooling for Obsidian, based on Lion Kimbro's methodology"
 readme = "docs/PRD.md"
 requires-python = ">=3.11"
-license = "MIT"
+license = { text = "MIT" }
 dependencies = [
     "typer>=0.15",
     "mcp>=1.0",

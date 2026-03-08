@@ -5,7 +5,7 @@ import typer
 from lionnotes import __version__
 
 
-def _version_callback(value: bool):
+def _version_callback(value: bool | None):
     if value:
         typer.echo(f"lionnotes {__version__}")
         raise typer.Exit()
