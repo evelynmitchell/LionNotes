@@ -4,7 +4,7 @@
 
 This document defines the **behavioral protocol** for operating a memory system built on Lion Kimbro's notebook architecture, implemented as an Obsidian vault. The protocol applies equally to both human and LLM operators — they are co-equal peers sharing one vault.
 
-**Operators interact through LionNotes tooling:** humans via the CLI (`lionnotes` commands), LLMs via the MCP server (which exposes the same operations). Both interfaces delegate to the Obsidian CLI for all vault I/O. See `implementation-plan.md` for the full tooling specification.
+**Operators interact through LionNotes tooling:** humans via the CLI (`lionnotes` commands), LLMs via the MCP server (which exposes the core capture, retrieval, and organization operations). Both interfaces delegate to the Obsidian CLI for all vault I/O. Some operations (e.g., `subjects merge/split`, `doctor`, `cache`) are CLI-only; see `implementation-plan.md` for the full tooling specification.
 
 The key insight from Kimbro: **structure and integration matter more than the raw content of thoughts.** Once you have the structure, the content becomes almost obvious. This is exactly what a memory system needs — not just information, but organized, contextual recall.
 
@@ -16,7 +16,7 @@ The key insight from Kimbro: **structure and integration matter more than the ra
 
 | Kimbro Concept | Vault Location | LionNotes CLI | MCP Tool |
 |---|---|---|---|
-| **Subject** | `{subject}/` folder | `lionnotes subjects create` | `list_subjects` |
+| **Subject** | `{subject}/` folder | `lionnotes subjects list` / `create` | `list_subjects` |
 | **Speed Thought** | `{subject}/speeds.md` (append-only) | `lionnotes capture -s SUBJECT` | `capture_speed` |
 | **POI (Point of Interest)** | `{subject}/POI-N-title.md` | `lionnotes poi` | `create_poi` |
 | **SMOC (Subject Map of Contents)** | `{subject}/SMOC.md` | `lionnotes map SUBJECT` | `read_smoc` |
@@ -98,6 +98,8 @@ vault/
 This is the behavioral specification for anyone — human or LLM — using this vault as a memory system. It defines **when** and **how** operators read, write, and reorganize.
 
 > **Note:** Examples below show both raw Obsidian CLI commands and their LionNotes equivalents. An LLM using the MCP server would call the corresponding MCP tools (e.g., `read_gsmoc`, `get_strategy`). A human would use `lionnotes` CLI commands. The behavioral rules are the same regardless of interface.
+>
+> **Path convention:** The Obsidian CLI `file=` parameter uses note names without the `.md` extension (e.g., `file="GSMOC"` refers to `GSMOC.md` on disk). This is standard Obsidian behavior — wikilinks like `[[GSMOC]]` also omit the extension.
 
 ### 3.1 Session Startup — Orientation
 

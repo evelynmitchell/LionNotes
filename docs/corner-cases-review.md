@@ -38,18 +38,18 @@ Reconciliation update: 2026-03-08
 
 ## 3. Structural Disagreement Between the Two Documents
 
-This is the largest gap. The two documents describe **different vault structures**:
+This is the largest gap. The two documents **previously** described different vault structures (now resolved — shown here for historical context):
 
-| Aspect | Architecture Doc | Implementation Plan |
+| Aspect | Architecture Doc (adopted) | Implementation Plan (was) |
 |---|---|---|
-| Speed thoughts | Single `subject/speeds.md` (append-only) | Individual files in `Speeds/{subject}/` |
-| POIs location | `subject/POI-N-title.md` (inside subject folder) | `POI/{subject}/POI-{n} {title}.md` (separate top-level folder) |
-| References | `subject/REF-N-title.md` (inside subject folder) | `References/{subject}/REF-{n} {title}.md` (separate top-level folder) |
-| Subject folder | Self-contained (`subject-name/SMOC.md`, `speeds.md`, `POI-*.md`) | Split across `Subjects/`, `Speeds/`, `POI/` top-level folders |
+| Speed thoughts | Single `{subject}/speeds.md` (append-only) | Individual files in `Speeds/{subject}/` |
+| POIs location | `{subject}/POI-N-title.md` (inside subject folder) | `POI/{subject}/POI-{n} {title}.md` (separate top-level folder) |
+| References | `{subject}/REF-N-title.md` (inside subject folder) | `References/{subject}/REF-{n} {title}.md` (separate top-level folder) |
+| Subject folder | Self-contained (`{subject}/SMOC.md`, `speeds.md`, `POI-*.md`) | Split across `Subjects/`, `Speeds/`, `POI/` top-level folders |
 | Inbox | `_inbox/unsorted.md` | `Speeds/_pan/` |
 | Strategy | `_strategy/active-priorities.md` | `Strategy.md` (root-level file) |
 | Templates | `_templates/` | `Templates/` |
-| Glossary/cheatsheet | Per-subject files | Not mentioned in implementation plan |
+| Glossary/cheatsheet | Per-subject files | Not mentioned |
 | Config | Not mentioned | `.lionnotes.toml` |
 
 **Impact:** These are not cosmetic differences — they affect wikilink paths, CLI command targets, and the fundamental mental model. The architecture doc's self-contained subject folders are simpler to reason about. The implementation plan's split structure makes cross-subject queries easier but complicates subject moves/merges.

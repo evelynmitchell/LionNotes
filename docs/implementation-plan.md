@@ -129,7 +129,8 @@ Capture a speed thought (the core daily operation):
 - If no `CONTENT` arg, opens `$EDITOR` or reads from stdin
 - If subject is specified, appends to `{subject}/speeds.md`
 - If pan-subject (no `-s`), appends to `_inbox/unsorted.md` for later triage
-- Frontmatter on speed pages: `speed_number`, `subject`, `hint`, `type`, `mapped: false`, `date`
+- Each speed page (`speeds.md`) has frontmatter: `type: speeds`, `subject`, `entry_count`, `last_entry`
+- Each entry within the page follows the format: `- S[N]: (context: hint) content #thought/type [mapped: POI-N | unmapped]`
 
 ### `lionnotes review`
 Interactive triage of unmapped speed thoughts:
@@ -191,8 +192,8 @@ Search the vault using Obsidian's index:
 ### `lionnotes cache`
 Manage the carry-about / common-store / archive tiers:
 - `lionnotes cache status` — show which subjects are in which tier
-- `lionnotes cache promote SUBJECT` — move from `_archive/` back to active
-- `lionnotes cache archive SUBJECT` — move notes to `{subject}/_archive/`
+- `lionnotes cache promote SUBJECT` — move notes from `{subject}/_archive/` back to active
+- `lionnotes cache archive SUBJECT` — move notes into `{subject}/_archive/`
 - Archive tier uses per-subject `_archive/` subfolders, not a top-level `Archive/` folder
 
 ### `lionnotes index SUBJECT`
@@ -304,18 +305,20 @@ These checks are performed by `lionnotes doctor`:
 
 ## Frontmatter Schemas
 
-### Speed Thought
+### Speed Page (`speeds.md`)
 ```yaml
 ---
-type: speed
-speed_number: 47
+type: speeds
 subject: "Personal Psychology"
-hint: "motivation decay"
-thought_type: observation  # observation, question, goal, problem, action, idea
-mapped: false
-date: 2026-03-07T14:23:00
+entry_count: 47
+last_entry: 2026-03-07T14:23:00
 ---
+# Personal Psychology — Speed Thoughts
+
+- S46: (context: procrastination) Motivation decays exponentially after initial enthusiasm #thought/observation
+- S47: (context: motivation decay) The "kitty model" — interest must be rekindled, not sustained #thought/principle [→ POI-07]
 ```
+Each entry is a line in the append-only log. Metadata (context, type, mapped status) is inline, not YAML frontmatter.
 
 ### POI
 ```yaml
@@ -447,8 +450,10 @@ expanded: false
    as unplaced notes and graduate. SMOCs are generated on demand. Indexes are built
    only when requested.
 
-3. **Human and LLM are co-equal operators** — the CLI and MCP server expose the
-   same operations over the same vault. Neither is primary; both are first-class.
+3. **Human and LLM are co-equal operators** — the CLI and MCP server operate on
+   the same vault. Neither is primary; both are first-class. The MCP server
+   exposes the core capture, retrieval, and organization operations; some
+   administrative operations (merge, split, doctor, cache) are CLI-only.
    A human can capture, review, and organize via the CLI; an LLM can do the same
    via MCP tools. The vault is the shared state and single source of truth. The
    agent protocol defined in `kimbro-memory-architecture.md` applies to both
