@@ -19,9 +19,17 @@ uv sync --dev
 echo "==> Verifying install"
 .venv/bin/python -c "import lionnotes; print(f'lionnotes {lionnotes.__version__} installed')"
 
-# Exit code 5 = no tests collected (OK during initial setup); other failures should surface
+# Exit code 0 = collected OK, exit code 5 = no tests collected (OK during initial setup)
+set +e
 .venv/bin/pytest --co -q
-echo "Test collection OK"
+pytest_exit=$?
+set -e
+if [ "$pytest_exit" -eq 0 ] || [ "$pytest_exit" -eq 5 ]; then
+    echo "Test collection OK (exit code ${pytest_exit})"
+else
+    echo "ERROR: pytest collection failed (exit code ${pytest_exit})"
+    exit 1
+fi
 
 echo ""
 echo "========================================="
