@@ -2,9 +2,11 @@
 
 ## Overview
 
-This document plans a **model memory system** built on Lion Kimbro's notebook architecture, implemented as an Obsidian vault managed through the Obsidian CLI. The system gives an LLM (or any AI agent) persistent, structured, navigable memory — not just a bag of embeddings, but a system with strategy, maps, and information flow.
+This document defines the **behavioral protocol** for operating a memory system built on Lion Kimbro's notebook architecture, implemented as an Obsidian vault. The protocol applies equally to both human and LLM operators — they are co-equal peers sharing one vault.
 
-The key insight from Kimbro: **structure and integration matter more than the raw content of thoughts.** Once you have the structure, the content becomes almost obvious. This is exactly what models lack — not information, but organized, contextual recall.
+**Operators interact through LionNotes tooling:** humans via the CLI (`lionnotes` commands), LLMs via the MCP server (which exposes the core capture, retrieval, and organization operations). Both interfaces delegate to the Obsidian CLI for all vault I/O. Some operations (e.g., `subjects merge/split`, `doctor`, `cache`) are CLI-only; see `implementation-plan.md` for the full tooling specification.
+
+The key insight from Kimbro: **structure and integration matter more than the raw content of thoughts.** Once you have the structure, the content becomes almost obvious. This is exactly what a memory system needs — not just information, but organized, contextual recall.
 
 ---
 
@@ -12,20 +14,21 @@ The key insight from Kimbro: **structure and integration matter more than the ra
 
 ### 1.1 Core Primitives
 
-| Kimbro Concept | Obsidian Implementation | CLI Command |
-|---|---|---|
-| **Subject** | Folder (top-level namespace) | `obsidian create name="SubjectName/..."` |
-| **Speed Thought** | Timestamped bullet in a speed note | `obsidian append file="Subject/speeds" content="- S42: ..."` |
-| **POI (Point of Interest)** | Long-form note within a subject | `obsidian create name="Subject/POI-07-the-kitty-model"` |
-| **SMOC (Subject Map of Contents)** | Index note per subject with wikilinks | `obsidian read file="Subject/SMOC"` |
-| **GSMOC (Grand Subject Map of Contents)** | Top-level vault index note | `obsidian read file="GSMOC"` |
-| **Pan-Subject Speed List** | Inbox/scratch note for unsorted thoughts | `obsidian daily:append content="..."` |
-| **Out Card** | Obsidian alias or redirect note | Link updates handled by `obsidian move` |
-| **References** | Notes with `type: reference` property | `obsidian search query="type:reference"` |
-| **Abbreviations/Shorthand (A/S)** | Glossary note per subject | `obsidian read file="Subject/glossary"` |
-| **Cheat Sheet** | Summary note per subject | `obsidian read file="Subject/cheatsheet"` |
-| **Purpose & Principles (P&P)** | Foundational note per subject | `obsidian read file="Subject/purpose"` |
-| **Archive** | `_archive/` subfolder or `archived: true` property | `obsidian move file="Note" to="Subject/_archive/"` |
+| Kimbro Concept | Vault Location | LionNotes CLI | MCP Tool |
+|---|---|---|---|
+| **Subject** | `{subject}/` folder | `lionnotes subjects list` / `create` | `list_subjects` |
+| **Speed Thought** | `{subject}/speeds.md` (append-only) | `lionnotes capture -s SUBJECT` | `capture_speed` |
+| **POI (Point of Interest)** | `{subject}/POI-N-title.md` | `lionnotes poi` | `create_poi` |
+| **SMOC (Subject Map of Contents)** | `{subject}/SMOC.md` | `lionnotes map SUBJECT` | `read_smoc` |
+| **GSMOC (Grand Subject Map of Contents)** | `GSMOC.md` | `lionnotes map` | `read_gsmoc` |
+| **Pan-Subject Speed List** | `_inbox/unsorted.md` | `lionnotes capture` (no `-s`) | `capture_speed` (no subject) |
+| **Out Card** | Auto-managed by Obsidian | `lionnotes subjects merge` | — |
+| **References** | `{subject}/REF-N-title.md` | `lionnotes ref` | `add_reference` |
+| **Abbreviations/Shorthand (A/S)** | `{subject}/glossary.md` | `lionnotes alias` | — |
+| **Cheat Sheet** | `{subject}/cheatsheet.md` | — | — |
+| **Purpose & Principles (P&P)** | `{subject}/purpose.md` | `lionnotes subjects pp` | `get_subject_pp` |
+| **Archive** | `{subject}/_archive/` | `lionnotes cache archive` | — |
+| **Strategy (Stickies)** | `_strategy/active-priorities.md` | `lionnotes strategy` | `get_strategy` / `set_strategy` |
 
 ### 1.2 The Four-Color System → Properties and Tags
 
@@ -83,31 +86,43 @@ vault/
 │   ├── REF-01-source-name.md   # Reference annotation #1
 │   └── _archive/               # Archived pages (red "old" mark)
 │       └── ...
-└── another-subject/
-    └── ...
+├── another-subject/
+│   └── ...
+└── .lionnotes.toml             # LionNotes config (vault path, per-subject speed counters)
 ```
 
 ---
 
-## Part 3: The Agent Protocol
+## Part 3: The Operator Protocol
 
-This is the behavioral specification for a model using this vault as memory. It defines **when** and **how** the model reads, writes, and reorganizes.
+This is the behavioral specification for anyone — human or LLM — using this vault as a memory system. It defines **when** and **how** operators read, write, and reorganize.
+
+> **Note:** Examples below show both raw Obsidian CLI commands and their LionNotes equivalents. An LLM using the MCP server would call the corresponding MCP tools (e.g., `read_gsmoc`, `get_strategy`). A human would use `lionnotes` CLI commands. The behavioral rules are the same regardless of interface.
+>
+> **Path convention:** The Obsidian CLI `file=` parameter uses note names without the `.md` extension (e.g., `file="GSMOC"` refers to `GSMOC.md` on disk). This is standard Obsidian behavior — wikilinks like `[[GSMOC]]` also omit the extension.
 
 ### 3.1 Session Startup — Orientation
 
-On every new session, the agent:
+On every new session, the operator:
 
 1. **Reads `GSMOC.md`** — gets the lay of the land. What subjects exist? What's the current structure?
 2. **Reads `_strategy/active-priorities.md`** — what's currently important? (Kimbro's "stickies")
 3. **Optionally scans recent daily notes** — what happened recently?
+4. **Checks for soft triggers** — if `_inbox/unsorted.md` has many entries, triage is needed. If any subject has 30+ un-synthesized speeds, synthesis is due.
 
 ```bash
+# Raw Obsidian CLI
 obsidian read file="GSMOC"
 obsidian read file="_strategy/active-priorities"
 obsidian daily:read
+
+# LionNotes CLI equivalents
+lionnotes map           # reads GSMOC
+lionnotes strategy list # reads active priorities
+lionnotes doctor        # checks environment + flags soft triggers
 ```
 
-This is the model's equivalent of Kimbro opening his carry-about binder and seeing his GSMOC with stickies on it.
+This is the equivalent of Kimbro opening his carry-about binder and seeing his GSMOC with stickies on it.
 
 ### 3.2 Capture — Recording Thoughts
 
@@ -119,9 +134,13 @@ If the model knows the subject, append directly to that subject's speed list. Av
 ```bash
 # Preferred: direct to subject
 obsidian append file="python/speeds" content="- S47: Generator expressions are lazy-evaluated, unlike list comprehensions #thought/observation"
+# LionNotes: lionnotes capture -s python "Generator expressions are lazy-evaluated..." -t observation
+# MCP: capture_speed(subject="python", content="...", type="observation")
 
 # Fallback: inbox when subject is unclear
 obsidian append file="_inbox/unsorted" content="- [python?] Generator memory behavior worth investigating #thought/question"
+# LionNotes: lionnotes capture "Generator memory behavior worth investigating" -t question
+# MCP: capture_speed(content="...", type="question")  — no subject = goes to inbox
 ```
 
 **Rule 2: Record the context, not just the thought.**
@@ -167,14 +186,18 @@ This is the most important maintenance operation. When a subject accumulates man
 2. Identify clusters of related thoughts
 3. Create a new POI synthesizing the cluster
 4. Update the SMOC to include the new POI
-5. Mark synthesized speed entries (prefix with `[→ POI-N]`)
+5. Mark synthesized speed entries by appending `[→ POI-N]` (e.g., `[→ POI-12]`)
 
 ```bash
+# Raw Obsidian CLI
 obsidian read file="python/speeds"
-# Model identifies S31-S38 all relate to async patterns
+# Operator identifies S31-S38 all relate to async patterns
 obsidian create name="python/POI-12-async-patterns" template="poi" silent
-# Model writes synthesized content
 obsidian append file="python/SMOC" content="- [[POI-12-async-patterns]] — async/await patterns, gathered from S31-S38"
+
+# LionNotes equivalents
+lionnotes review -s python     # shows unmapped speeds, offers synthesis
+lionnotes poi python "Async Patterns"  # creates POI-12 in python/ folder, auto-links from SMOC
 ```
 
 **Kimbro's principle applies here: structure > content.** The POI's title and its position in the SMOC matter more than the details inside it. A well-mapped POI can be found; an unindexed one is lost.
@@ -198,8 +221,10 @@ Kimbro's Late Binding principle: **do reorganization work at the latest possible
 # Only when a subject gets big and confusing:
 obsidian create name="async-python/SMOC" template="smoc" silent
 obsidian move file="python/POI-12-async-patterns" to="async-python/"
-# Update GSMOC
 obsidian append file="GSMOC" content="- [[async-python/SMOC]] — split from python, covers async/await patterns"
+
+# LionNotes equivalent (handles moves, SMOC updates, and GSMOC in one operation):
+lionnotes subjects split python
 ```
 
 ### 3.6 Strategy — The Stickies
@@ -488,9 +513,13 @@ The one Kimbro warning that *does* transfer: **resistance to new thinking.** If 
 
 ---
 
+## Related Documents
+
+- **`implementation-plan.md`** — the LionNotes CLI + MCP server specification that implements this protocol as tooling.
+- **`corner-cases-review.md`** — edge cases and gaps identified during review.
+
 ## Next Steps
 
-1. Review this plan for gaps and misalignments with Kimbro's original intent
-2. Build the vault structure and templates (Phase 1)
-3. Write the agent protocol as a `CLAUDE.md` instruction set
-4. Run a proof-of-concept session demonstrating the full pipeline
+1. Implement the LionNotes tooling per `implementation-plan.md`
+2. Embed the operator protocol (Part 3) into the vault's `CLAUDE.md` for LLM agents
+3. Run a proof-of-concept session demonstrating the full pipeline with both human and LLM operators

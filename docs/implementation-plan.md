@@ -108,11 +108,22 @@ Built with [Typer](https://typer.tiangolo.com/). Installed as `lionnotes`.
 
 ### `lionnotes init`
 Initialize a new LionNotes vault (or adopt an existing Obsidian vault):
-- Create folder structure: `Speeds/`, `Subjects/`, `POI/`, `Chrono/`, `Unplaced/`, `Archive/`, `References/`, `Templates/`
+- Create folder structure: `_inbox/`, `_strategy/`, `_templates/`
 - Create GSMOC note
 - Create Global A/S note
 - Create Subject Registry note
 - Store config in `.lionnotes.toml` at vault root
+
+### `lionnotes doctor`
+Validate the LionNotes environment and flag maintenance needs:
+- Check Obsidian is running and CLI version is v1.12+
+- Verify vault is accessible and `.lionnotes.toml` exists
+- Report SMOC/GSMOC inconsistencies (orphan links, missing entries)
+- Check for unresolved template variables in notes
+- **Soft triggers** (non-blocking warnings):
+  - `_inbox/unsorted.md` has accumulated entries → suggest triage
+  - Any subject has 30+ unmapped speed entries → suggest synthesis
+  - Subjects on `_strategy/maintenance-queue.md` → remind about pending reorg
 
 ### `lionnotes capture [CONTENT]`
 Capture a speed thought (the core daily operation):
@@ -120,14 +131,16 @@ Capture a speed thought (the core daily operation):
 - `--hint` / `-h`: Context hint (1-3 words)
 - `--type` / `-t`: Thought type (observation, question, goal, problem, action, idea...)
 - If no `CONTENT` arg, opens `$EDITOR` or reads from stdin
-- Creates a speed note in `Speeds/{subject}/` with auto-incrementing number
-- If pan-subject (no `-s`), creates in `Speeds/_pan/` for later triage
-- Frontmatter: `speed_number`, `subject`, `hint`, `type`, `mapped: false`, `date`
+- If subject is specified, appends to `{subject}/speeds.md`
+- If pan-subject (no `-s`), appends to `_inbox/unsorted.md` for later triage
+- Each speed page (`speeds.md`) has frontmatter: `type: speeds`, `subject`, `entry_count`, `last_entry`
+- Each entry within the page follows the format: `- S[N]: (context: hint) content #thought/type`
+- Mapped entries are suffixed with `[→ POI-N]` (e.g., `[→ POI-07]`); unmapped entries have no suffix
 
 ### `lionnotes review`
 Interactive triage of unmapped speed thoughts:
 - `--subject` / `-s`: Review speeds for one subject (default: all)
-- `--pan`: Review pan-subject speeds and assign them to subjects
+- `--pan`: Review `_inbox/unsorted.md` speeds and assign them to subjects
 - For each unmapped speed:
   - Show content, hint, context
   - Options: **map** (place on SMOC), **expand** (start a POI), **skip**, **archive**
@@ -138,7 +151,7 @@ Interactive triage of unmapped speed thoughts:
 Manage the subject taxonomy:
 - `lionnotes subjects list` — show all subjects with speed counts, last activity
 - `lionnotes subjects create NAME` — create a new subject (tab + SMOC + P&P stub)
-- `lionnotes subjects pp NAME` — view/edit Purpose & Principles for a subject
+- `lionnotes subjects pp NAME` — view/edit Purpose & Principles (`purpose.md`) for a subject
 - `lionnotes subjects merge SOURCE TARGET` — merge one subject into another
 - `lionnotes subjects split NAME` — interactive split of a subject into two
 - `lionnotes subjects promote` — promote an unplaced proto-subject to full subject
@@ -152,24 +165,25 @@ View or regenerate a Subject Map of Contents:
 
 ### `lionnotes poi SUBJECT TITLE`
 Create or manage Points of Interest:
-- Creates a numbered POI note in `POI/{subject}/`
+- Creates a numbered POI note in `{subject}/POI-{n}-{title}.md`
 - Auto-links from the subject's SMOC
 - `--continue POI_NUM`: Append to an existing POI (sequence continuation)
 - POI frontmatter: `poi_number`, `subject`, `title`, `date`, `sequence_page`
 
 ### `lionnotes chrono [CONTENT]`
 Add a chronolog entry:
-- Appends timestamped entry to today's daily note or a subject chronolog
-- `--subject` / `-s`: Subject-specific chronolog (default: global daily)
+- Appends timestamped entry to today's daily note or a subject's speed page
+- `--subject` / `-s`: Subject-specific entry (default: global daily note via `obsidian daily:append`)
+- Timestamps use the host machine's local timezone (Obsidian CLI runs locally). Override via `timezone` in `.lionnotes.toml` if needed
 
 ### `lionnotes ref SUBJECT TITLE`
 Add a reference:
 - `--url`, `--author`, `--year`, `--notes`
-- Creates a reference note in `References/{subject}/`
+- Creates a reference note in `{subject}/REF-{n}-{title}.md`
 - Auto-numbered, linked from subject's reference TOC
 
 ### `lionnotes strategy`
-Manage active priorities (the digital equivalent of stickies on the GSMOC):
+Manage active priorities in `_strategy/active-priorities.md` (the digital equivalent of stickies on the GSMOC):
 - `lionnotes strategy list` — show active strategy items
 - `lionnotes strategy add SUBJECT DESCRIPTION` — flag something as strategically active
 - `lionnotes strategy done ITEM` — remove a strategy flag
@@ -184,8 +198,9 @@ Search the vault using Obsidian's index:
 ### `lionnotes cache`
 Manage the carry-about / common-store / archive tiers:
 - `lionnotes cache status` — show which subjects are in which tier
-- `lionnotes cache promote SUBJECT` — move from archive to common-store
-- `lionnotes cache archive SUBJECT` — move from common-store to archive
+- `lionnotes cache promote SUBJECT` — move notes from `{subject}/_archive/` back to active
+- `lionnotes cache archive SUBJECT` — move notes into `{subject}/_archive/`
+- Archive tier uses per-subject `_archive/` subfolders, not a top-level `Archive/` folder
 
 ### `lionnotes index SUBJECT`
 Build or update a late-bound index for a subject:
@@ -235,7 +250,7 @@ Built with the [MCP Python SDK](https://github.com/modelcontextprotocol/python-s
 | `lionnotes://gsmoc` | Current GSMOC content |
 | `lionnotes://subjects` | Subject registry |
 | `lionnotes://strategy` | Active strategy items |
-| `lionnotes://speeds/{subject}` | Unmapped speeds for a subject |
+| `lionnotes://speeds/{subject}` | Unmapped speeds for a subject (from `{subject}/speeds.md`) |
 
 ### Prompts exposed:
 
@@ -250,60 +265,66 @@ Built with the [MCP Python SDK](https://github.com/modelcontextprotocol/python-s
 
 ## Vault Structure (generated by `lionnotes init`)
 
+Each subject is a self-contained folder — its speeds, POIs, references, and maps
+all live together, like Kimbro's binder metaphor. This makes subject merge/split
+operations straightforward and keeps the mental model simple.
+
 ```
 vault/
 ├── GSMOC.md                    # Grand Subject Map of Contents (root note)
 ├── Subject Registry.md         # Hash/index of all subjects
 ├── Global Aliases.md           # Global abbreviations/shorthands
-├── Strategy.md                 # Active priorities (digital stickies)
-├── Speeds/
-│   ├── _pan/                   # Pan-subject speed thoughts (unsorted)
-│   └── {subject}/              # Per-subject speed thoughts
-├── Subjects/
-│   └── {subject}/
-│       ├── SMOC.md             # Subject Map of Contents
-│       └── P&P.md              # Purpose & Principles
-├── POI/
-│   └── {subject}/
-│       └── POI-{n} {title}.md  # Points of Interest
-├── Chrono/
-│   └── {YYYY-MM-DD}.md        # Daily chronolog
-├── References/
-│   └── {subject}/
-│       └── REF-{n} {title}.md  # Reference notes
-├── Unplaced/                   # Proto-subjects (not yet full subjects)
-├── Archive/                    # Archived/inactive subjects
-├── Templates/
-│   ├── Speed.md
-│   ├── POI.md
-│   ├── SMOC.md
-│   ├── P&P.md
-│   ├── Reference.md
-│   └── Chronolog.md
+├── _inbox/
+│   └── unsorted.md             # Pan-subject speed thoughts (temporary capture)
+├── _strategy/
+│   ├── active-priorities.md    # Kimbro's "stickies" — what's hot right now
+│   └── maintenance-queue.md    # Subjects needing reorganization
+├── _templates/
+│   ├── speed-page.md
+│   ├── poi.md
+│   ├── smoc.md
+│   ├── purpose.md
+│   ├── reference.md
+│   └── subject-bootstrap.md    # Template for initializing a new subject
+├── {subject-name}/             # Self-contained subject folder
+│   ├── SMOC.md                 # Subject Map of Contents
+│   ├── purpose.md              # Purpose & Principles
+│   ├── glossary.md             # Abbreviations & Shorthand
+│   ├── speeds.md               # Speed thoughts (append-only log)
+│   ├── cheatsheet.md           # Quick-reference summary
+│   ├── POI-01-topic-name.md    # Point of Interest #1
+│   ├── POI-02-topic-name.md    # Point of Interest #2
+│   ├── REF-01-source-name.md   # Reference annotation #1
+│   └── _archive/               # Archived pages within this subject
+├── another-subject/
+│   └── ...
 └── .lionnotes.toml             # LionNotes config
 ```
-1. **Link validation**: Script to check all `[[wikilinks]]` resolve to actual files
+These checks are performed by `lionnotes doctor`:
+
+1. **Link validation**: Check all `[[wikilinks]]` resolve to actual files
 2. **Tag consistency**: Verify tag taxonomy is consistently applied
 3. **Graph connectivity**: Ensure no orphan notes exist
-4. **Accessibility**: Ensure alt-text on images, clear heading hierarchy (WCAG)
-5. **License compliance**: Ensure all content remains compatible with the repository's CC0 1.0 Universal (public domain dedication) license
+4. **SMOC/GSMOC consistency**: Detect orphan entries and missing POIs in maps
 
 ---
 
 ## Frontmatter Schemas
 
-### Speed Thought
+### Speed Page (`speeds.md`)
 ```yaml
 ---
-type: speed
-speed_number: 47
+type: speeds
 subject: "Personal Psychology"
-hint: "motivation decay"
-thought_type: observation  # observation, question, goal, problem, action, idea
-mapped: false
-date: 2026-03-07T14:23:00
+entry_count: 47
+last_entry: 2026-03-07T14:23:00
 ---
+# Personal Psychology — Speed Thoughts
+
+- S46: (context: procrastination) Motivation decays exponentially after initial enthusiasm #thought/observation
+- S47: (context: motivation decay) The "kitty model" — interest must be rekindled, not sustained #thought/principle [→ POI-07]
 ```
+Each entry is a line in the append-only log. Metadata (context, type, mapped status) is inline, not YAML frontmatter.
 
 ### POI
 ```yaml
@@ -330,7 +351,7 @@ last_activity: 2026-03-07
 ---
 ```
 
-### Purpose & Principles
+### Purpose & Principles (`purpose.md`)
 ```yaml
 ---
 type: pp
@@ -369,9 +390,10 @@ expanded: false
 ### Phase 1: Foundation
 - `pyproject.toml` with Typer + MCP SDK dependencies
 - `obsidian.py` — Obsidian CLI wrapper with error handling
-- `config.py` — `.lionnotes.toml` reader/writer
-- `templates.py` — note templates for all types
-- `lionnotes init` command
+- `config.py` — `.lionnotes.toml` reader/writer (including per-subject speed counters)
+- `templates.py` — note template resolution (LionNotes owns variable resolution, not Obsidian Templater)
+- `lionnotes init` command (creates `_inbox/`, `_strategy/`, `_templates/`)
+- `lionnotes doctor` command (validates Obsidian CLI version, vault access, environment)
 - Basic tests for Obsidian CLI wrapper (mocked)
 
 ### Phase 2: Core Capture Loop
@@ -399,8 +421,10 @@ expanded: false
 ### Phase 5: MCP Server
 - MCP server with all tools from the table above
 - MCP resources for vault state
-- MCP prompts for guided LLM workflows
+- MCP prompts for guided LLM workflows (including the agent protocol from `kimbro-memory-architecture.md`)
 - Integration with Claude Code via MCP config
+- Error semantics for each MCP tool (auto-create vs. fail on missing subject, etc.)
+- Pagination parameters for `search_vault` and `review_unmapped`
 
 ### Phase 6: Polish
 - Error handling and edge cases
@@ -432,9 +456,16 @@ expanded: false
    as unplaced notes and graduate. SMOCs are generated on demand. Indexes are built
    only when requested.
 
-3. **Same operations for human and LLM** — the MCP server exposes the exact same
-   operations as the CLI. The vault is the shared state. Either party can capture,
-   review, organize.
+3. **Human and LLM are co-equal operators** — the CLI and MCP server operate on
+   the same vault. Neither is primary; both are first-class. The MCP server
+   exposes the core capture, retrieval, and organization operations; some
+   administrative operations (merge, split, doctor, cache) are CLI-only.
+   A human can capture, review, and organize via the CLI; an LLM can do the same
+   via MCP tools. The vault is the shared state and single source of truth. The
+   agent protocol defined in `kimbro-memory-architecture.md` applies to both
+   operators — the behavioral rules (session orientation, capture-to-subject,
+   synthesis triggers, late-binding reorganization) are the same whether a human
+   or LLM is following them.
 
 4. **Speed of capture is paramount** — `lionnotes capture "thought"` must be
    fast and frictionless. All categorization can happen later during review.
@@ -443,13 +474,27 @@ expanded: false
    tooling enhances it but doesn't lock it in. You can always use the vault
    without LionNotes.
 
+6. **Self-contained subject folders** — each subject is a binder. Its speeds,
+   POIs, references, maps, and archive all live in one folder. This makes merge
+   and split operations simple and keeps the mental model aligned with Kimbro's
+   original binder metaphor.
+
 ---
+
+## Related Documents
+
+- **`kimbro-memory-architecture.md`** — the agent protocol (session startup,
+  capture rules, synthesis triggers, late-binding reorganization). This protocol
+  defines behavioral rules that apply to both human and LLM operators.
+- **`corner-cases-review.md`** — edge cases and gaps identified during review.
 
 ## What This Plan Does NOT Include
 
 - **Digitizing the book itself** — the original plan for converting book.txt into
-  vault content is a separate effort
+  vault content is a separate effort (see `LionVault.md`)
 - **Obsidian plugin development** — we use the CLI, not the plugin API
 - **Graph database export** — possible future feature, not in scope
 - **Mobile support** — Obsidian CLI is desktop-only; mobile use would need a
   different approach
+- **Multi-agent concurrency** — multiple agents sharing one vault is a future
+  concern requiring optimistic locking (see corner case #10)
