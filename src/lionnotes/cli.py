@@ -289,6 +289,17 @@ def doctor(
                 _check("Inbox", True, "empty")
         else:
             _check("Inbox", True, "no inbox file")
+
+        mq_path = vp / "_strategy" / "maintenance-queue.md"
+        if mq_path.is_file():
+            mq_content = mq_path.read_text(encoding="utf-8")
+            mq_entries = _count_entries(mq_content)
+            if mq_entries > 0:
+                _warn("Maintenance queue", f"{mq_entries} pending items")
+            else:
+                _check("Maintenance queue", True, "empty")
+        else:
+            _check("Maintenance queue", True, "no queue file")
     else:
         _warn("Maintenance checks", "skipped (no vault path)")
 

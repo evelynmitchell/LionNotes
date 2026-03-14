@@ -135,3 +135,24 @@ class TestDoctorSoftTriggers:
             )
             assert "WARN" in result.output
             assert "2 unsorted entries" in result.output
+
+    def test_offline_maintenance_queue_check(self, vault_with_config: Path):
+        """Doctor checks maintenance queue via direct file read when offline."""
+        strategy_dir = vault_with_config / "_strategy"
+        strategy_dir.mkdir()
+        (strategy_dir / "maintenance-queue.md").write_text(
+            "# Maintenance Queue\n- reorg python subject\n",
+            encoding="utf-8",
+        )
+
+        with patch("lionnotes.cli.ObsidianCLI") as mock_cls:
+            from lionnotes.obsidian import ObsidianNotFoundError
+
+            instance = mock_cls.return_value
+            instance.version.side_effect = ObsidianNotFoundError()
+
+            result = runner.invoke(
+                app, ["doctor", "--vault-path", str(vault_with_config)]
+            )
+            assert "WARN" in result.output
+            assert "1 pending items" in result.output
