@@ -48,6 +48,14 @@ class TestBuildArgs:
         ]
 
 
+class TestQuote:
+    def test_escapes_double_quotes(self):
+        assert ObsidianCLI._quote('my "note"') == 'my \\"note\\"'
+
+    def test_plain_string_unchanged(self):
+        assert ObsidianCLI._quote("simple") == "simple"
+
+
 class TestRun:
     @patch("lionnotes.obsidian.subprocess.run")
     def test_returns_stdout(self, mock_run, cli: ObsidianCLI):
@@ -66,7 +74,7 @@ class TestRun:
     @patch("lionnotes.obsidian.subprocess.run")
     def test_raises_not_running_on_connection_error(self, mock_run, cli: ObsidianCLI):
         mock_run.return_value = _make_completed_process(
-            returncode=1, stderr="ECONNREFUSED: connect failed"
+            returncode=1, stderr="ECONNREFUSED: connection refused"
         )
         with pytest.raises(ObsidianNotRunningError, match="Is it running"):
             cli._run("read", 'file="test"')
@@ -108,6 +116,13 @@ class TestNoteOperations:
         cmd = mock_run.call_args[0][0]
         assert cmd == ["obsidian", "read", 'file="my-note"']
         assert result == "# Hello\n"
+
+    @patch("lionnotes.obsidian.subprocess.run")
+    def test_read_escapes_quotes(self, mock_run, cli: ObsidianCLI):
+        mock_run.return_value = _make_completed_process(stdout="content")
+        cli.read('my "note"')
+        cmd = mock_run.call_args[0][0]
+        assert cmd == ["obsidian", "read", 'file="my \\"note\\""']
 
     @patch("lionnotes.obsidian.subprocess.run")
     def test_create_minimal(self, mock_run, cli: ObsidianCLI):

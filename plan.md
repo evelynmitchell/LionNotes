@@ -156,7 +156,7 @@ The implementation plan doc defines 6 phases. Here's the concrete coding plan fo
 
 1. **Core functions are CLI-independent** — `capture.py`, `subjects.py`, `maps.py`, etc. are plain Python functions that take an `ObsidianCLI` instance. CLI and MCP both call into them. No business logic in `cli.py` or `mcp_server.py`.
 
-2. **All vault I/O through ObsidianCLI** — no direct file reads/writes. Tests mock the `ObsidianCLI` class.
+2. **Vault I/O through ObsidianCLI when available** — runtime commands use `ObsidianCLI` for all vault I/O so that the search index and wikilinks stay consistent. `init` and `doctor` fall back to direct file reads/writes when Obsidian is not running (setup may happen before Obsidian is available). Tests mock the `ObsidianCLI` class.
 
 3. **Subject name normalization** — lowercase, hyphens for spaces, reject reserved names and special chars. Applied at creation time.
 

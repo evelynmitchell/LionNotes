@@ -50,6 +50,11 @@ class ObsidianCLI:
 
     # -- internal -----------------------------------------------------------
 
+    @staticmethod
+    def _quote(value: str) -> str:
+        """Escape double quotes in a value for CLI key=value args."""
+        return value.replace('"', '\\"')
+
     def _build_args(self, *args: str) -> list[str]:
         """Build the full argument list for a CLI invocation."""
         cmd: list[str] = ["obsidian"]
@@ -78,8 +83,9 @@ class ObsidianCLI:
 
         # Detect connection failures
         connection_markers = (
-            "connect",
-            "ECONNREFUSED",
+            "connection refused",
+            "could not connect",
+            "econnrefused",
             "not running",
             "no response",
         )
@@ -98,7 +104,7 @@ class ObsidianCLI:
 
     def read(self, file: str) -> str:
         """Read a note's content."""
-        return self._run("read", f'file="{file}"')
+        return self._run("read", f'file="{self._quote(file)}"')
 
     def create(
         self,
@@ -108,32 +114,40 @@ class ObsidianCLI:
         silent: bool = True,
     ) -> None:
         """Create a new note."""
-        args = ["create", f'name="{name}"']
+        args = ["create", f'name="{self._quote(name)}"']
         if content:
-            args.append(f'content="{content}"')
+            args.append(f'content="{self._quote(content)}"')
         if template:
-            args.append(f'template="{template}"')
+            args.append(f'template="{self._quote(template)}"')
         if silent:
             args.append("silent")
         self._run(*args)
 
     def append(self, file: str, content: str) -> None:
         """Append content to an existing note."""
-        self._run("append", f'file="{file}"', f'content="{content}"')
+        self._run(
+            "append",
+            f'file="{self._quote(file)}"',
+            f'content="{self._quote(content)}"',
+        )
 
     def rename(self, file: str, new_name: str) -> None:
         """Rename a note (automatically updates wikilinks)."""
-        self._run("rename", f'file="{file}"', f'new_name="{new_name}"')
+        self._run(
+            "rename",
+            f'file="{self._quote(file)}"',
+            f'new_name="{self._quote(new_name)}"',
+        )
 
     # -- search & discovery -------------------------------------------------
 
     def search(self, query: str, limit: int = 20) -> str:
         """Search the vault."""
-        return self._run("search", f'query="{query}"', f"limit={limit}")
+        return self._run("search", f'query="{self._quote(query)}"', f"limit={limit}")
 
     def backlinks(self, file: str) -> str:
         """Get backlinks for a note."""
-        return self._run("backlinks", f'file="{file}"')
+        return self._run("backlinks", f'file="{self._quote(file)}"')
 
     def tags(self, sort: str = "count") -> str:
         """List tags in the vault."""
@@ -145,14 +159,18 @@ class ObsidianCLI:
         """Set a frontmatter property on a note."""
         self._run(
             "property:set",
-            f'name="{name}"',
-            f'value="{value}"',
-            f'file="{file}"',
+            f'name="{self._quote(name)}"',
+            f'value="{self._quote(value)}"',
+            f'file="{self._quote(file)}"',
         )
 
     def property_get(self, file: str, name: str) -> str:
         """Get a frontmatter property from a note."""
-        return self._run("property:get", f'name="{name}"', f'file="{file}"')
+        return self._run(
+            "property:get",
+            f'name="{self._quote(name)}"',
+            f'file="{self._quote(file)}"',
+        )
 
     # -- daily notes --------------------------------------------------------
 
@@ -162,7 +180,7 @@ class ObsidianCLI:
 
     def daily_append(self, content: str) -> None:
         """Append to today's daily note."""
-        self._run("daily:append", f'content="{content}"')
+        self._run("daily:append", f'content="{self._quote(content)}"')
 
     # -- meta ---------------------------------------------------------------
 
