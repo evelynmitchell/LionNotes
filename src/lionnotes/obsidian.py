@@ -14,10 +14,7 @@ class ObsidianCLIError(Exception):
         self.cli_args = args
         self.returncode = returncode
         self.stderr = stderr
-        msg = (
-            f"obsidian {' '.join(args)} "
-            f"failed (exit {returncode}): {stderr}"
-        )
+        msg = f"obsidian {' '.join(args)} failed (exit {returncode}): {stderr}"
         super().__init__(msg)
 
 
@@ -57,7 +54,7 @@ class ObsidianCLI:
         """Build the full argument list for a CLI invocation."""
         cmd: list[str] = ["obsidian"]
         if self.vault is not None:
-            cmd.append(f'vault={self.vault}')
+            cmd.append(f"vault={self.vault}")
         cmd.extend(args)
         return cmd
 
@@ -75,15 +72,16 @@ class ObsidianCLI:
         except FileNotFoundError as exc:
             raise ObsidianNotFoundError() from exc
         except subprocess.TimeoutExpired as exc:
-            raise ObsidianCLIError(
-                cmd[1:], -1, "Command timed out"
-            ) from exc
+            raise ObsidianCLIError(cmd[1:], -1, "Command timed out") from exc
 
         stderr = result.stderr.strip()
 
         # Detect connection failures
         connection_markers = (
-            "connect", "ECONNREFUSED", "not running", "no response",
+            "connect",
+            "ECONNREFUSED",
+            "not running",
+            "no response",
         )
         lower_stderr = stderr.lower()
         if result.returncode != 0 and any(
@@ -177,7 +175,7 @@ class ObsidianCLI:
         ver_str = self.version()
         # Parse version like "1.12.4" into tuple of ints
         try:
-            parts = tuple(int(p) for p in ver_str.split(".")[:len(minimum)])
+            parts = tuple(int(p) for p in ver_str.split(".")[: len(minimum)])
         except (ValueError, AttributeError):
             return False
         return parts >= minimum

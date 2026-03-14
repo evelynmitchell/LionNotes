@@ -78,9 +78,7 @@ class TestInitOffline:
 
     @patch("lionnotes.cli.ObsidianCLI")
     def test_nonexistent_path_fails(self, mock_cls, tmp_path: Path):
-        result = runner.invoke(
-            app, ["init", "--vault-path", str(tmp_path / "nope")]
-        )
+        result = runner.invoke(app, ["init", "--vault-path", str(tmp_path / "nope")])
         assert result.exit_code == 1
         assert "not a directory" in result.output.lower() or "Error" in result.output
 
@@ -105,12 +103,15 @@ class TestInitWithObsidian:
     def test_skips_existing_obsidian_files(self, mock_cls, vault_dir: Path):
         instance = mock_cls.return_value
         instance.version.return_value = "1.12.4"
+
         # GSMOC exists, others don't
         def read_side_effect(name):
             if name == "GSMOC":
                 return "# existing"
             from lionnotes.obsidian import ObsidianCLIError
+
             raise ObsidianCLIError(["read"], 1, "not found")
+
         instance.read.side_effect = read_side_effect
 
         result = runner.invoke(app, ["init", "--vault-path", str(vault_dir)])

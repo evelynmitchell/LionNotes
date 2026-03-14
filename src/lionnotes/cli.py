@@ -162,6 +162,7 @@ def init(
 
 # -- doctor -----------------------------------------------------------------
 
+
 def _check(label: str, passed: bool, detail: str = "") -> bool:
     """Print a pass/fail check line and return the result."""
     icon = "PASS" if passed else "FAIL"
@@ -174,10 +175,7 @@ def _check(label: str, passed: bool, detail: str = "") -> bool:
 
 def _count_entries(text: str) -> int:
     """Count lines starting with '- ' (list entries)."""
-    return sum(
-        1 for line in text.splitlines()
-        if line.strip().startswith("- ")
-    )
+    return sum(1 for line in text.splitlines() if line.strip().startswith("- "))
 
 
 def _warn(label: str, detail: str = "") -> None:
@@ -222,9 +220,7 @@ def doctor(
             _check("Config", True, str(config_file))
         except ConfigNotFoundError as exc:
             _check("Config", False, "Not found")
-            typer.echo(
-                "\nRun 'lionnotes init --vault-path <path>' first."
-            )
+            typer.echo("\nRun 'lionnotes init --vault-path <path>' first.")
             raise typer.Exit(1) from exc
 
     # 2. Check Obsidian CLI

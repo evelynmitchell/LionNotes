@@ -15,9 +15,7 @@ class TestRender:
         assert "# python — Speed Thoughts" in result
 
     def test_poi(self):
-        result = render(
-            "poi", subject="python", poi_number=7, title="Async Patterns"
-        )
+        result = render("poi", subject="python", poi_number=7, title="Async Patterns")
         assert "poi_number: 7" in result
         assert 'title: "Async Patterns"' in result
         assert "# POI 7: Async Patterns" in result

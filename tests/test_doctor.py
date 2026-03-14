@@ -24,9 +24,7 @@ def vault_with_config(tmp_path: Path) -> Path:
 
 class TestDoctorNoConfig:
     def test_fails_without_config(self, tmp_path: Path):
-        result = runner.invoke(
-            app, ["doctor", "--vault-path", str(tmp_path)]
-        )
+        result = runner.invoke(app, ["doctor", "--vault-path", str(tmp_path)])
         assert result.exit_code == 1
         assert "FAIL" in result.output
         assert "init" in result.output.lower()
@@ -45,9 +43,7 @@ class TestDoctorWithConfig:
         instance = mock_cls.return_value
         instance.version.side_effect = ObsidianNotFoundError()
 
-        result = runner.invoke(
-            app, ["doctor", "--vault-path", str(vault_with_config)]
-        )
+        result = runner.invoke(app, ["doctor", "--vault-path", str(vault_with_config)])
         assert result.exit_code == 0
         assert "PASS" in result.output  # config passed
         assert "FAIL" in result.output  # obsidian failed
@@ -60,9 +56,7 @@ class TestDoctorWithConfig:
         instance = mock_cls.return_value
         instance.version.side_effect = ObsidianNotRunningError()
 
-        result = runner.invoke(
-            app, ["doctor", "--vault-path", str(vault_with_config)]
-        )
+        result = runner.invoke(app, ["doctor", "--vault-path", str(vault_with_config)])
         assert "FAIL" in result.output
         assert "Not running" in result.output
 
@@ -72,9 +66,7 @@ class TestDoctorWithConfig:
         instance.version.return_value = "1.11.0"
         instance.check_version.return_value = False
 
-        result = runner.invoke(
-            app, ["doctor", "--vault-path", str(vault_with_config)]
-        )
+        result = runner.invoke(app, ["doctor", "--vault-path", str(vault_with_config)])
         assert "FAIL" in result.output
 
     @patch("lionnotes.cli.ObsidianCLI")
@@ -84,9 +76,7 @@ class TestDoctorWithConfig:
         instance.check_version.return_value = True
         instance.read.return_value = "# content"
 
-        result = runner.invoke(
-            app, ["doctor", "--vault-path", str(vault_with_config)]
-        )
+        result = runner.invoke(app, ["doctor", "--vault-path", str(vault_with_config)])
         assert result.exit_code == 0
         assert "FAIL" not in result.output
         assert "Done" in result.output
@@ -103,11 +93,10 @@ class TestDoctorSoftTriggers:
             if name == "_inbox/unsorted":
                 return "# Unsorted\n- thought one\n- thought two\n- thought three\n"
             return "# content"
+
         instance.read.side_effect = read_side_effect
 
-        result = runner.invoke(
-            app, ["doctor", "--vault-path", str(vault_with_config)]
-        )
+        result = runner.invoke(app, ["doctor", "--vault-path", str(vault_with_config)])
         assert "WARN" in result.output
         assert "3 unsorted entries" in result.output
 
@@ -121,11 +110,10 @@ class TestDoctorSoftTriggers:
             if name == "_inbox/unsorted":
                 return "# Unsorted\n"
             return "# content"
+
         instance.read.side_effect = read_side_effect
 
-        result = runner.invoke(
-            app, ["doctor", "--vault-path", str(vault_with_config)]
-        )
+        result = runner.invoke(app, ["doctor", "--vault-path", str(vault_with_config)])
         assert "WARN" not in result.output
 
     def test_offline_inbox_check(self, vault_with_config: Path):
@@ -138,6 +126,7 @@ class TestDoctorSoftTriggers:
 
         with patch("lionnotes.cli.ObsidianCLI") as mock_cls:
             from lionnotes.obsidian import ObsidianNotFoundError
+
             instance = mock_cls.return_value
             instance.version.side_effect = ObsidianNotFoundError()
 
