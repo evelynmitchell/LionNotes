@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import typer
 
 from lionnotes import __version__
+from lionnotes.capture import CaptureError, capture_speed
 from lionnotes.config import (
     Config,
     ConfigNotFoundError,
@@ -20,6 +22,7 @@ from lionnotes.obsidian import (
     ObsidianNotFoundError,
     ObsidianNotRunningError,
 )
+from lionnotes.subjects import SubjectError, create_subject, list_subjects
 from lionnotes.templates import render
 
 
@@ -35,6 +38,14 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+# Sub-command group for subjects
+subjects_app = typer.Typer(
+    name="subjects",
+    help="Manage subjects.",
+    no_args_is_help=True,
+)
+app.add_typer(subjects_app, name="subjects")
+
 
 @app.callback()
 def main(
@@ -48,6 +59,62 @@ def main(
     ),
 ):
     """Thought mapping tooling for Obsidian vaults."""
+
+
+# -- helpers ----------------------------------------------------------------
+
+
+def _get_obsidian_and_config(
+    vault_path: str | None = None,
+) -> tuple[ObsidianCLI, Config]:
+    """Resolve config and create an ObsidianCLI instance.
+
+    Raises typer.Exit(1) on failure.
+    """
+    if vault_path:
+        vp = Path(vault_path).resolve()
+        config_file = vp / ".lionnotes.toml"
+        if not config_file.is_file():
+            typer.echo(
+                f"Error: No .lionnotes.toml in {vp}. Run 'lionnotes init' first.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        config = load_config(config_file)
+    else:
+        try:
+            config_file = find_config()
+            config = load_config(config_file)
+        except ConfigNotFoundError:
+            typer.echo(
+                "Error: No .lionnotes.toml found. "
+                "Run 'lionnotes init --vault-path <path>' first.",
+                err=True,
+            )
+            raise typer.Exit(1)  # noqa: B904
+
+    vp = Path(config.vault_path)
+    vname = config.vault_name or vp.name
+    obsidian = ObsidianCLI(vault=vname)
+
+    # Verify Obsidian CLI is available
+    try:
+        obsidian.version()
+    except ObsidianNotFoundError:
+        typer.echo(
+            "Error: Obsidian CLI not found. "
+            "Install Obsidian v1.12+ and enable the CLI.",
+            err=True,
+        )
+        raise typer.Exit(1)  # noqa: B904
+    except ObsidianNotRunningError:
+        typer.echo(
+            "Error: Cannot connect to Obsidian. Is it running?",
+            err=True,
+        )
+        raise typer.Exit(1)  # noqa: B904
+
+    return obsidian, config
 
 
 # -- init -------------------------------------------------------------------
@@ -65,7 +132,6 @@ _INIT_FILES: list[tuple[str, str]] = [
 
 def _write_file_direct(vault_path: Path, name: str, content: str) -> None:
     """Write a markdown file directly to disk (offline fallback)."""
-    # name uses Obsidian note-name convention (no .md extension, may have /)
     file_path = vault_path / f"{name}.md"
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(content, encoding="utf-8")
@@ -97,7 +163,6 @@ def init(
         typer.echo(f"Error: {vault_path} is not a directory.", err=True)
         raise typer.Exit(1)
 
-    # Determine vault name for Obsidian CLI (default: directory name)
     vname = vault_name or vp.name
 
     # Try Obsidian CLI, fall back to direct file writes
@@ -115,7 +180,6 @@ def init(
     skipped = []
 
     for note_name, template_name in _INIT_FILES:
-        # Check existence
         exists = False
         if use_obsidian and obsidian is not None:
             try:
@@ -139,16 +203,14 @@ def init(
 
         created.append(note_name)
 
-    # Write config
     config_path = vp / ".lionnotes.toml"
     if config_path.is_file():
         skipped.append(".lionnotes.toml")
     else:
-        config = Config(vault_path=str(vp))
+        config = Config(vault_path=str(vp), vault_name=vname)
         save_config(config, config_path)
         created.append(".lionnotes.toml")
 
-    # Report
     if created:
         typer.echo("Created:")
         for name in created:
@@ -198,7 +260,6 @@ def doctor(
     """Validate the LionNotes environment and flag maintenance needs."""
     typer.echo("LionNotes Doctor\n")
 
-    # 1. Find config
     typer.echo("Environment:")
     config: Config | None = None
     vp: Path | None = None
@@ -209,7 +270,11 @@ def doctor(
             config = load_config(config_file)
             _check("Config", True, str(config_file))
         else:
-            _check("Config", False, f"No .lionnotes.toml in {vp}")
+            _check(
+                "Config",
+                False,
+                f"No .lionnotes.toml in {vp}",
+            )
             typer.echo("\nRun 'lionnotes init --vault-path <path>' first.")
             raise typer.Exit(1)
     else:
@@ -223,7 +288,6 @@ def doctor(
             typer.echo("\nRun 'lionnotes init --vault-path <path>' first.")
             raise typer.Exit(1) from exc
 
-    # 2. Check Obsidian CLI
     vname = vp.name if vp else None
     obsidian = ObsidianCLI(vault=vname)
     obsidian_ok = False
@@ -240,7 +304,6 @@ def doctor(
     except ObsidianNotRunningError:
         _check("Obsidian CLI", False, "Not running")
 
-    # 3. Check vault structure
     typer.echo("\nVault structure:")
     for note_name, _ in _INIT_FILES:
         if obsidian_ok:
@@ -253,38 +316,43 @@ def doctor(
             exists = _file_exists_direct(vp, note_name) if vp else False
             _check(note_name, exists, "" if exists else "missing")
 
-    # 4. Soft triggers
     typer.echo("\nMaintenance:")
     if obsidian_ok:
-        # Check inbox
         try:
             inbox = obsidian.read("_inbox/unsorted")
             entry_count = _count_entries(inbox)
             if entry_count > 0:
-                _warn("Inbox", f"{entry_count} unsorted entries — consider triage")
+                _warn(
+                    "Inbox",
+                    f"{entry_count} unsorted entries — consider triage",
+                )
             else:
                 _check("Inbox", True, "empty")
         except ObsidianCLIError:
             _check("Inbox", True, "no inbox file")
 
-        # Check maintenance queue
         try:
             mq = obsidian.read("_strategy/maintenance-queue")
             mq_entries = _count_entries(mq)
             if mq_entries > 0:
-                _warn("Maintenance queue", f"{mq_entries} pending items")
+                _warn(
+                    "Maintenance queue",
+                    f"{mq_entries} pending items",
+                )
             else:
                 _check("Maintenance queue", True, "empty")
         except ObsidianCLIError:
             _check("Maintenance queue", True, "no queue file")
     elif vp:
-        # Offline checks via direct file reads
         inbox_path = vp / "_inbox" / "unsorted.md"
         if inbox_path.is_file():
             content = inbox_path.read_text(encoding="utf-8")
             entry_count = _count_entries(content)
             if entry_count > 0:
-                _warn("Inbox", f"{entry_count} unsorted entries — consider triage")
+                _warn(
+                    "Inbox",
+                    f"{entry_count} unsorted entries — consider triage",
+                )
             else:
                 _check("Inbox", True, "empty")
         else:
@@ -295,7 +363,10 @@ def doctor(
             mq_content = mq_path.read_text(encoding="utf-8")
             mq_entries = _count_entries(mq_content)
             if mq_entries > 0:
-                _warn("Maintenance queue", f"{mq_entries} pending items")
+                _warn(
+                    "Maintenance queue",
+                    f"{mq_entries} pending items",
+                )
             else:
                 _check("Maintenance queue", True, "empty")
         else:
@@ -304,3 +375,151 @@ def doctor(
         _warn("Maintenance checks", "skipped (no vault path)")
 
     typer.echo("\nDone.")
+
+
+# -- capture ----------------------------------------------------------------
+
+
+@app.command()
+def capture(
+    content: str = typer.Argument(
+        None,
+        help="The thought to capture. Reads from stdin if omitted.",
+    ),
+    subject: str | None = typer.Option(None, "--subject", "-s", help="Target subject."),
+    hint: str | None = typer.Option(
+        None, "--hint", "-h", help="Context hint (1-3 words)."
+    ),
+    thought_type: str | None = typer.Option(
+        None, "--type", "-t", help="Thought type (e.g. observation, question)."
+    ),
+    vault_path: str | None = typer.Option(
+        None,
+        "--vault-path",
+        "-p",
+        help="Vault path (default: auto-detect).",
+    ),
+):
+    """Capture a speed thought."""
+    # Read from stdin if no content argument
+    if content is None:
+        if sys.stdin.isatty():
+            typer.echo(
+                "Error: No content provided. Pass as argument or pipe via stdin.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        content = sys.stdin.read()
+
+    obsidian, config = _get_obsidian_and_config(vault_path)
+
+    try:
+        entry = capture_speed(
+            content,
+            obsidian,
+            config,
+            subject=subject,
+            hint=hint,
+            thought_type=thought_type,
+        )
+    except CaptureError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    target = subject or "inbox"
+    typer.echo(f"Captured to {target}:")
+    typer.echo(f"  {entry}")
+
+
+# -- subjects ---------------------------------------------------------------
+
+
+@subjects_app.command("create")
+def subjects_create(
+    name: str = typer.Argument(..., help="Subject name."),
+    vault_path: str | None = typer.Option(
+        None,
+        "--vault-path",
+        "-p",
+        help="Vault path (default: auto-detect).",
+    ),
+):
+    """Create a new subject."""
+    obsidian, config = _get_obsidian_and_config(vault_path)
+
+    try:
+        normalized = create_subject(name, obsidian, config)
+    except SubjectError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(f"Created subject '{normalized}' with:")
+    typer.echo(f"  + {normalized}/SMOC.md")
+    typer.echo(f"  + {normalized}/purpose.md")
+    typer.echo(f"  + {normalized}/speeds.md")
+    typer.echo(f"  + {normalized}/glossary.md")
+    typer.echo(f"  + {normalized}/cheatsheet.md")
+
+
+@subjects_app.command("list")
+def subjects_list(
+    vault_path: str | None = typer.Option(
+        None,
+        "--vault-path",
+        "-p",
+        help="Vault path (default: auto-detect).",
+    ),
+):
+    """List all subjects in the vault."""
+    obsidian, config = _get_obsidian_and_config(vault_path)
+    subjects = list_subjects(obsidian, config)
+
+    if not subjects:
+        typer.echo("No subjects found.")
+        return
+
+    for s in subjects:
+        flags = []
+        if s.has_speeds:
+            flags.append("speeds")
+        if s.has_purpose:
+            flags.append("P&P")
+        suffix = f"  ({', '.join(flags)})" if flags else ""
+        typer.echo(f"  {s.name}{suffix}")
+
+
+# -- search -----------------------------------------------------------------
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="Search query."),
+    subject: str | None = typer.Option(
+        None, "--subject", "-s", help="Scope to a subject folder."
+    ),
+    vault_path: str | None = typer.Option(
+        None,
+        "--vault-path",
+        "-p",
+        help="Vault path (default: auto-detect).",
+    ),
+):
+    """Search the vault using Obsidian's index."""
+    obsidian, config = _get_obsidian_and_config(vault_path)
+
+    # Scope query to subject folder if specified
+    search_query = query
+    if subject:
+        search_query = f"path:{subject} {query}"
+
+    try:
+        results = obsidian.search(search_query)
+    except ObsidianCLIError as exc:
+        typer.echo(f"Search failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    output = results.strip()
+    if not output:
+        typer.echo("No results found.")
+    else:
+        typer.echo(output)
