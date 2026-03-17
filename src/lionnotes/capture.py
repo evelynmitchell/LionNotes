@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from lionnotes.config import Config, next_speed_number, save_config
 from lionnotes.obsidian import ObsidianCLI
-from lionnotes.vault import subject_exists
+from lionnotes.vault import (
+    normalize_subject_name,
+    subject_exists,
+    validate_subject_name,
+)
 
 # Valid thought types (Kimbro's Psi classification)
 THOUGHT_TYPES: frozenset[str] = frozenset(
@@ -80,6 +84,12 @@ def capture_speed(
         )
 
     if subject:
+        # Validate and normalize
+        error = validate_subject_name(subject)
+        if error:
+            raise CaptureError(error)
+        subject = normalize_subject_name(subject)
+
         # Capture to subject
         if not subject_exists(subject, obsidian):
             raise CaptureError(

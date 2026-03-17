@@ -94,7 +94,26 @@ def _get_obsidian_and_config(
             raise typer.Exit(1)  # noqa: B904
 
     vp = Path(config.vault_path)
-    obsidian = ObsidianCLI(vault=vp.name)
+    vname = config.vault_name or vp.name
+    obsidian = ObsidianCLI(vault=vname)
+
+    # Verify Obsidian CLI is available
+    try:
+        obsidian.version()
+    except ObsidianNotFoundError:
+        typer.echo(
+            "Error: Obsidian CLI not found. "
+            "Install Obsidian v1.12+ and enable the CLI.",
+            err=True,
+        )
+        raise typer.Exit(1)  # noqa: B904
+    except ObsidianNotRunningError:
+        typer.echo(
+            "Error: Cannot connect to Obsidian. Is it running?",
+            err=True,
+        )
+        raise typer.Exit(1)  # noqa: B904
+
     return obsidian, config
 
 
@@ -188,7 +207,7 @@ def init(
     if config_path.is_file():
         skipped.append(".lionnotes.toml")
     else:
-        config = Config(vault_path=str(vp))
+        config = Config(vault_path=str(vp), vault_name=vname)
         save_config(config, config_path)
         created.append(".lionnotes.toml")
 
@@ -477,9 +496,6 @@ def search(
     query: str = typer.Argument(..., help="Search query."),
     subject: str | None = typer.Option(
         None, "--subject", "-s", help="Scope to a subject folder."
-    ),
-    context: bool = typer.Option(
-        False, "--context", "-c", help="Show surrounding content."
     ),
     vault_path: str | None = typer.Option(
         None,

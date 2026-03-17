@@ -68,12 +68,19 @@ def count_unmapped_speeds(subject: str, obsidian: ObsidianCLI) -> int:
 
 
 def subject_exists(name: str, obsidian: ObsidianCLI) -> bool:
-    """Check if a subject exists (has a SMOC.md)."""
+    """Check if a subject exists (has a SMOC.md).
+
+    Raises ObsidianCLIError for operational failures (permissions, etc.)
+    that are not simple "not found" errors.
+    """
     try:
         obsidian.read(f"{name}/SMOC")
         return True
-    except ObsidianCLIError:
-        return False
+    except ObsidianCLIError as exc:
+        lower = exc.stderr.lower()
+        if "not found" in lower or "does not exist" in lower or "no such" in lower:
+            return False
+        raise
 
 
 def validate_subject_name(name: str) -> str | None:
@@ -94,8 +101,15 @@ def validate_subject_name(name: str) -> str | None:
                 "(reserved for internal use)."
             )
 
+    # Reject path traversal patterns
+    if "/" in stripped or "\\" in stripped:
+        return "Subject name cannot contain path separators."
+
+    if stripped in (".", "..") or stripped.startswith("../") or "/.." in stripped:
+        return "Subject name cannot contain path traversal sequences."
+
     # Check for filesystem-problematic characters
-    bad_chars = set('<>:"|?*\\')
+    bad_chars = set('<>:"|?*')
     found = [c for c in stripped if c in bad_chars]
     if found:
         return (

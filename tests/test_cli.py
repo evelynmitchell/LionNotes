@@ -44,6 +44,7 @@ class TestCaptureCLI:
         save_config(config)
 
         instance = mock_cls.return_value
+        instance.version.return_value = "1.12.0"
 
         result = runner.invoke(
             app,
@@ -61,6 +62,7 @@ class TestCaptureCLI:
         save_config(config)
 
         instance = mock_cls.return_value
+        instance.version.return_value = "1.12.0"
         instance.read.return_value = "# SMOC"
 
         result = runner.invoke(
@@ -83,13 +85,18 @@ class TestCaptureCLI:
         vault.mkdir()
         save_config(Config(vault_path=str(vault)))
 
+        instance = mock_cls.return_value
+        instance.version.return_value = "1.12.0"
+
         result = runner.invoke(
             app,
             ["capture", "--vault-path", str(vault)],
+            input="",
         )
-        # No content and isatty() in test runner context
-        # Should either error or read empty stdin
-        assert result.exit_code in (0, 1)
+        # Empty stdin should fail with a clear error
+        assert result.exit_code == 1
+        output = result.output.lower()
+        assert "empty thought" in output or "no content" in output
 
 
 class TestSubjectsCLI:
@@ -100,6 +107,7 @@ class TestSubjectsCLI:
         save_config(Config(vault_path=str(vault)))
 
         instance = mock_cls.return_value
+        instance.version.return_value = "1.12.0"
         instance.read.side_effect = ObsidianCLIError(["read"], 1, "not found")
 
         result = runner.invoke(
@@ -123,6 +131,7 @@ class TestSubjectsCLI:
         save_config(Config(vault_path=str(vault)))
 
         instance = mock_cls.return_value
+        instance.version.return_value = "1.12.0"
         instance.search.return_value = "python/SMOC.md\n"
         instance.read.return_value = "content"
 
@@ -140,6 +149,7 @@ class TestSubjectsCLI:
         save_config(Config(vault_path=str(vault)))
 
         instance = mock_cls.return_value
+        instance.version.return_value = "1.12.0"
         instance.search.side_effect = ObsidianCLIError(["search"], 1, "error")
 
         result = runner.invoke(
@@ -158,6 +168,7 @@ class TestSearchCLI:
         save_config(Config(vault_path=str(vault)))
 
         instance = mock_cls.return_value
+        instance.version.return_value = "1.12.0"
         instance.search.return_value = "python/speeds.md\n"
 
         result = runner.invoke(
@@ -174,6 +185,7 @@ class TestSearchCLI:
         save_config(Config(vault_path=str(vault)))
 
         instance = mock_cls.return_value
+        instance.version.return_value = "1.12.0"
         instance.search.return_value = ""
 
         result = runner.invoke(
@@ -190,6 +202,7 @@ class TestSearchCLI:
         save_config(Config(vault_path=str(vault)))
 
         instance = mock_cls.return_value
+        instance.version.return_value = "1.12.0"
         instance.search.return_value = "python/speeds.md\n"
 
         result = runner.invoke(
