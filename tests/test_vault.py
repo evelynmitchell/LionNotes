@@ -54,6 +54,16 @@ class TestCountUnmappedSpeeds:
         obs.read.side_effect = ObsidianCLIError(["read"], 1, "not found")
         assert count_unmapped_speeds("my-subject", obs) == 0
 
+    def test_reraises_non_not_found_errors(self):
+        import pytest
+
+        obs = _make_obsidian()
+        obs.read.side_effect = ObsidianCLIError(
+            ["read"], -1, "Command timed out",
+        )
+        with pytest.raises(ObsidianCLIError, match="timed out"):
+            count_unmapped_speeds("my-subject", obs)
+
     def test_all_unmapped(self):
         obs = _make_obsidian()
         obs.read.return_value = (

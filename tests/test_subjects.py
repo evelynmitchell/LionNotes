@@ -133,6 +133,15 @@ class TestListSubjects:
         result = list_subjects(obs)
         assert result == []
 
+    def test_reraises_non_not_found_errors(self):
+        obs = MagicMock()
+        obs.search.side_effect = ObsidianCLIError(
+            ["search"], -1, "Command timed out",
+        )
+
+        with pytest.raises(ObsidianCLIError, match="timed out"):
+            list_subjects(obs)
+
     def test_filters_internal_folders(self):
         obs = MagicMock()
         obs.search.return_value = (

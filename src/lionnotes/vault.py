@@ -38,8 +38,10 @@ def count_unmapped_speeds(subject: str, obsidian: ObsidianCLI) -> int:
     """
     try:
         content = obsidian.read(f"{subject}/speeds")
-    except ObsidianCLIError:
-        return 0
+    except ObsidianCLIError as exc:
+        if exc.is_not_found:
+            return 0
+        raise
 
     count = 0
     for line in content.splitlines():

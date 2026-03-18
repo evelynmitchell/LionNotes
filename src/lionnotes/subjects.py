@@ -105,8 +105,10 @@ def list_subjects(
     """
     try:
         results = obsidian.search("type: smoc", limit=limit)
-    except ObsidianCLIError:
-        return []
+    except ObsidianCLIError as exc:
+        if exc.is_not_found or "no results" in exc.stderr.lower():
+            return []
+        raise
 
     subjects = []
     for line in results.strip().splitlines():
