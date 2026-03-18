@@ -152,7 +152,21 @@ class ObsidianCLI:
 
     def search(self, query: str, limit: int = 20) -> str:
         """Search the vault."""
-        return self._run("search", f'query="{self._quote(query)}"', f"limit={limit}")
+        return self._run(
+            "search",
+            f'query="{self._quote(query)}"',
+            f"limit={limit}",
+        )
+
+    def search_context(
+        self, query: str, limit: int = 10,
+    ) -> str:
+        """Search the vault with surrounding context."""
+        return self._run(
+            "search:context",
+            f'query="{self._quote(query)}"',
+            f"limit={limit}",
+        )
 
     def backlinks(self, file: str) -> str:
         """Get backlinks for a note."""

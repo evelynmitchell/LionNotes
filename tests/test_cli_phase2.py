@@ -47,6 +47,16 @@ class TestCaptureCommand:
         assert result.exit_code == 0
         assert "Captured to my-topic" in result.output
 
+    def test_capture_shows_normalized_subject(self, mock_env):
+        """Output should show the normalized name, not raw input."""
+        config, obs = mock_env
+        obs.read.return_value = "# speeds"
+        result = runner.invoke(
+            app, ["capture", "A thought", "-s", "My Topic"],
+        )
+        assert result.exit_code == 0
+        assert "Captured to my-topic" in result.output
+
     def test_capture_with_hint_and_type(self, mock_env):
         config, obs = mock_env
         obs.read.return_value = "# speeds"
@@ -147,6 +157,19 @@ class TestSearchCommand:
         )
         assert result.exit_code == 0
         assert "No results found in subject" in result.output
+
+    def test_search_context_uses_search_context(self, mock_env):
+        """--context flag should call search_context, not search."""
+        config, obs = mock_env
+        obs.search_context.return_value = (
+            "my-topic/speeds.md: S1: A thought\n"
+        )
+        result = runner.invoke(
+            app, ["search", "thought", "--context"],
+        )
+        assert result.exit_code == 0
+        obs.search_context.assert_called_once()
+        obs.search.assert_not_called()
 
     def test_search_error(self, mock_env):
         config, obs = mock_env

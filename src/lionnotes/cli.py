@@ -22,7 +22,12 @@ from lionnotes.obsidian import (
     ObsidianNotFoundError,
     ObsidianNotRunningError,
 )
-from lionnotes.subjects import SubjectError, create_subject, list_subjects
+from lionnotes.subjects import (
+    SubjectError,
+    create_subject,
+    list_subjects,
+    normalize_subject_name,
+)
 from lionnotes.templates import render
 
 
@@ -369,11 +374,15 @@ def capture(
     obsidian = _resolve_obsidian(config)
 
     try:
+        # Normalize subject for display (capture_speed also normalizes)
+        display_subject = (
+            normalize_subject_name(subject) if subject else None
+        )
         entry = capture_speed(
             content, obsidian, config,
             subject=subject, hint=hint, thought_type=thought_type,
         )
-        target = subject or "inbox"
+        target = display_subject or "inbox"
         typer.echo(f"Captured to {target}: {entry}")
     except (SubjectError, ValueError) as exc:
         typer.echo(f"Error: {exc}", err=True)
@@ -454,7 +463,7 @@ def search(
 
     try:
         if context:
-            results = obsidian.search(search_query)
+            results = obsidian.search_context(search_query)
         else:
             results = obsidian.search(search_query)
 
@@ -464,7 +473,13 @@ def search(
 
         # Filter by subject if specified (path-segment match)
         if subject:
-            normalized_subj = subject.strip().lower().replace(" ", "-")
+            try:
+                normalized_subj = normalize_subject_name(subject)
+            except SubjectError:
+                # Fall back to basic normalization for search
+                normalized_subj = (
+                    subject.strip().lower().replace(" ", "-")
+                )
             filtered_lines = []
             for line in results.strip().splitlines():
                 # Split into path segments for exact folder matching
