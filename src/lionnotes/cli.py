@@ -147,7 +147,7 @@ def init(
     if config_path.is_file():
         skipped.append(".lionnotes.toml")
     else:
-        config = Config(vault_path=str(vp))
+        config = Config(vault_path=str(vp), vault_name=vname)
         save_config(config, config_path)
         created.append(".lionnotes.toml")
 
@@ -329,9 +329,13 @@ def _resolve_config(vault_path: str | None = None) -> Config:
 
 
 def _resolve_obsidian(config: Config) -> ObsidianCLI:
-    """Create an ObsidianCLI instance from config."""
-    vp = Path(config.vault_path)
-    return ObsidianCLI(vault=vp.name)
+    """Create an ObsidianCLI instance from config.
+
+    Uses the persisted vault_name when available, falling back to
+    the directory name of vault_path.
+    """
+    name = config.vault_name or Path(config.vault_path).name
+    return ObsidianCLI(vault=name)
 
 
 # -- capture ----------------------------------------------------------------
@@ -458,14 +462,19 @@ def search(
             typer.echo("No results found.")
             return
 
-        # Filter by subject if specified
+        # Filter by subject if specified (path-segment match)
         if subject:
+            normalized_subj = subject.strip().lower().replace(" ", "-")
             filtered_lines = []
             for line in results.strip().splitlines():
-                if line.strip().startswith(f"{subject}/") or f"/{subject}/" in line:
+                # Split into path segments for exact folder matching
+                segments = line.strip().replace("\\", "/").split("/")
+                if normalized_subj in segments:
                     filtered_lines.append(line)
             if not filtered_lines:
-                typer.echo(f"No results found in subject '{subject}'.")
+                typer.echo(
+                    f"No results found in subject '{subject}'."
+                )
                 return
             typer.echo("\n".join(filtered_lines))
         else:

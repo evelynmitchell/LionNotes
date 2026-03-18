@@ -15,12 +15,17 @@ def get_vault_path(config: Config) -> Path:
 
 
 def subject_exists(name: str, obsidian: ObsidianCLI) -> bool:
-    """Check if a subject folder exists by trying to read its SMOC."""
+    """Check if a subject folder exists by trying to read its SMOC.
+
+    Raises ObsidianCLIError for non-"not found" failures (e.g. timeouts).
+    """
     try:
         obsidian.read(f"{name}/SMOC")
         return True
-    except ObsidianCLIError:
-        return False
+    except ObsidianCLIError as exc:
+        if exc.is_not_found:
+            return False
+        raise
 
 
 _MAPPED_PATTERN = re.compile(r"\[→\s*POI-\d+\]")

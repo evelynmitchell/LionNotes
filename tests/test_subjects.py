@@ -45,6 +45,14 @@ class TestNormalizeSubjectName:
         with pytest.raises(SubjectError, match="reserved"):
             normalize_subject_name("GSMOC")
 
+    def test_rejects_reserved_subject_registry(self):
+        with pytest.raises(SubjectError, match="reserved"):
+            normalize_subject_name("Subject Registry")
+
+    def test_rejects_reserved_global_aliases(self):
+        with pytest.raises(SubjectError, match="reserved"):
+            normalize_subject_name("Global Aliases")
+
     def test_rejects_special_chars(self):
         with pytest.raises(SubjectError, match="Invalid"):
             normalize_subject_name("hello@world")
@@ -144,3 +152,17 @@ class TestListSubjects:
 
         result = list_subjects(obs)
         assert result == ["alpha"]
+
+    def test_passes_limit_to_search(self):
+        obs = MagicMock()
+        obs.search.return_value = "alpha/SMOC.md\n"
+
+        list_subjects(obs, limit=500)
+        obs.search.assert_called_once_with("type: smoc", limit=500)
+
+    def test_default_limit_is_200(self):
+        obs = MagicMock()
+        obs.search.return_value = ""
+
+        list_subjects(obs)
+        obs.search.assert_called_once_with("type: smoc", limit=200)

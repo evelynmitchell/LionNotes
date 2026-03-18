@@ -129,10 +129,24 @@ class TestSearchCommand:
             "alpha/speeds.md: S1: A thought\n"
             "beta/speeds.md: S2: Another thought\n"
         )
-        result = runner.invoke(app, ["search", "thought", "-s", "alpha"])
+        result = runner.invoke(
+            app, ["search", "thought", "-s", "alpha"],
+        )
         assert result.exit_code == 0
         assert "alpha" in result.output
         assert "beta" not in result.output
+
+    def test_search_subject_filter_uses_segments(self, mock_env):
+        """Ensure filtering matches path segments, not substrings."""
+        config, obs = mock_env
+        obs.search.return_value = (
+            "alphabeta/speeds.md: S1: A thought\n"
+        )
+        result = runner.invoke(
+            app, ["search", "thought", "-s", "alpha"],
+        )
+        assert result.exit_code == 0
+        assert "No results found in subject" in result.output
 
     def test_search_error(self, mock_env):
         config, obs = mock_env

@@ -14,14 +14,15 @@ class SubjectError(Exception):
 
 
 # Reserved top-level names that cannot be used as subjects
+# Stored in normalized form (lowercase, hyphens) to match after normalization
 _RESERVED_NAMES = frozenset(
     {
         "_inbox",
         "_strategy",
         "_templates",
         "gsmoc",
-        "subject registry",
-        "global aliases",
+        "subject-registry",
+        "global-aliases",
     }
 )
 
@@ -72,8 +73,9 @@ def create_subject(
     try:
         obsidian.read(f"{normalized}/SMOC")
         raise SubjectError(f"Subject '{normalized}' already exists.")
-    except ObsidianCLIError:
-        pass  # Good — doesn't exist yet
+    except ObsidianCLIError as exc:
+        if not exc.is_not_found:
+            raise  # Re-raise real errors (timeouts, permissions, etc.)
 
     # Create the subject files
     files = [
@@ -93,13 +95,16 @@ def create_subject(
     return normalized
 
 
-def list_subjects(obsidian: ObsidianCLI) -> list[str]:
+def list_subjects(
+    obsidian: ObsidianCLI, *, limit: int = 200,
+) -> list[str]:
     """List all subjects in the vault by searching for SMOC notes.
 
     Returns a sorted list of subject names.
+    *limit* controls the maximum number of search results fetched.
     """
     try:
-        results = obsidian.search("type: smoc")
+        results = obsidian.search("type: smoc", limit=limit)
     except ObsidianCLIError:
         return []
 

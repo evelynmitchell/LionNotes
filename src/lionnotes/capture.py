@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from lionnotes.config import Config, next_speed_number, save_config
 from lionnotes.obsidian import ObsidianCLI, ObsidianCLIError
-from lionnotes.subjects import SubjectError
+from lionnotes.subjects import SubjectError, normalize_subject_name
 
 
 def _format_speed_entry(
@@ -54,15 +54,21 @@ def capture_speed(
     if not content:
         raise ValueError("Capture content cannot be empty.")
 
+    # Normalize subject name to ensure consistent counter keys and paths
+    if subject:
+        subject = normalize_subject_name(subject)
+
     if subject:
         # Verify subject exists
         try:
             obsidian.read(f"{subject}/speeds")
         except ObsidianCLIError as exc:
-            raise SubjectError(
-                f"Subject '{subject}' does not exist. "
-                "Create it first with 'lionnotes subjects create'."
-            ) from exc
+            if exc.is_not_found:
+                raise SubjectError(
+                    f"Subject '{subject}' does not exist. "
+                    "Create it first with 'lionnotes subjects create'."
+                ) from exc
+            raise  # Re-raise real errors (timeouts, permissions, etc.)
 
         number = next_speed_number(config, subject)
         entry = _format_speed_entry(number, content, hint, thought_type)

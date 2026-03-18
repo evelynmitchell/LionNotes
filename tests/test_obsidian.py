@@ -31,6 +31,28 @@ def cli_with_vault():
     return ObsidianCLI(vault="TestVault")
 
 
+class TestIsNotFound:
+    def test_not_found_message(self):
+        err = ObsidianCLIError(["read"], 1, "File not found")
+        assert err.is_not_found is True
+
+    def test_does_not_exist_message(self):
+        err = ObsidianCLIError(["read"], 1, "Note does not exist")
+        assert err.is_not_found is True
+
+    def test_no_such_message(self):
+        err = ObsidianCLIError(["read"], 1, "No such file")
+        assert err.is_not_found is True
+
+    def test_timeout_is_not_not_found(self):
+        err = ObsidianCLIError(["read"], -1, "Command timed out")
+        assert err.is_not_found is False
+
+    def test_permission_is_not_not_found(self):
+        err = ObsidianCLIError(["read"], 1, "Permission denied")
+        assert err.is_not_found is False
+
+
 class TestBuildArgs:
     def test_no_vault(self, cli: ObsidianCLI):
         assert cli._build_args("read", 'file="note"') == [

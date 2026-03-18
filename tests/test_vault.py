@@ -37,6 +37,16 @@ class TestSubjectExists:
         obs.read.side_effect = ObsidianCLIError(["read"], 1, "not found")
         assert subject_exists("nonexistent", obs) is False
 
+    def test_reraises_non_not_found_errors(self):
+        import pytest
+
+        obs = _make_obsidian()
+        obs.read.side_effect = ObsidianCLIError(
+            ["read"], -1, "Command timed out",
+        )
+        with pytest.raises(ObsidianCLIError, match="timed out"):
+            subject_exists("my-subject", obs)
+
 
 class TestCountUnmappedSpeeds:
     def test_no_speeds_file(self):

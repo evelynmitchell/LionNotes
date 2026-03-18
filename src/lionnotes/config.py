@@ -20,6 +20,7 @@ class Config:
     """LionNotes vault configuration."""
 
     vault_path: str
+    vault_name: str | None = None
     timezone: str | None = None
     speed_counters: dict[str, int] = field(default_factory=dict)
 
@@ -55,6 +56,7 @@ def load_config(path: Path) -> Config:
         data = tomllib.load(f)
     return Config(
         vault_path=data["vault_path"],
+        vault_name=data.get("vault_name"),
         timezone=data.get("timezone"),
         speed_counters=data.get("speed_counters", {}),
     )
@@ -64,6 +66,8 @@ def save_config(config: Config, path: Path | None = None) -> None:
     """Write a Config to .lionnotes.toml."""
     target = path or config.config_path
     data: dict = {"vault_path": config.vault_path}
+    if config.vault_name is not None:
+        data["vault_name"] = config.vault_name
     if config.timezone is not None:
         data["timezone"] = config.timezone
     if config.speed_counters:

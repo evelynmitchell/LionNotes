@@ -119,3 +119,27 @@ class TestCaptureSpeed:
 
         with pytest.raises(ValueError, match="cannot be empty"):
             capture_speed("   ", obs, config)
+
+    def test_normalizes_subject_name(self, tmp_path):
+        obs = MagicMock()
+        obs.read.return_value = "# speeds"
+        config = self._make_config(tmp_path)
+
+        entry = capture_speed(
+            "A thought", obs, config, subject="My Topic",
+        )
+
+        assert entry == "- S1: A thought"
+        obs.append.assert_called_once()
+        assert "my-topic/speeds" in obs.append.call_args.args[0]
+        assert config.speed_counters["my-topic"] == 1
+
+    def test_reraises_non_not_found_errors(self, tmp_path):
+        obs = MagicMock()
+        obs.read.side_effect = ObsidianCLIError(
+            ["read"], -1, "Command timed out",
+        )
+        config = self._make_config(tmp_path)
+
+        with pytest.raises(ObsidianCLIError, match="timed out"):
+            capture_speed("A thought", obs, config, subject="my-topic")

@@ -39,12 +39,14 @@ class TestSaveAndLoad:
         vault_dir.mkdir()
         config = Config(
             vault_path=str(vault_dir),
+            vault_name="MyVault",
             timezone="America/New_York",
             speed_counters={"python": 47, "c++": 12},
         )
         save_config(config)
         loaded = load_config(config.config_path)
         assert loaded.vault_path == str(vault_dir)
+        assert loaded.vault_name == "MyVault"
         assert loaded.timezone == "America/New_York"
         assert loaded.speed_counters == {"python": 47, "c++": 12}
 

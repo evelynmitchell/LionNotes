@@ -17,6 +17,15 @@ class ObsidianCLIError(Exception):
         msg = f"obsidian {' '.join(args)} failed (exit {returncode}): {stderr}"
         super().__init__(msg)
 
+    @property
+    def is_not_found(self) -> bool:
+        """Return True if the error indicates a missing file/note."""
+        lower = self.stderr.lower()
+        return any(
+            m in lower
+            for m in ("not found", "does not exist", "no such", "doesn't exist")
+        )
+
 
 class ObsidianNotRunningError(Exception):
     """Cannot connect to a running Obsidian instance."""
