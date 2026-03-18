@@ -4,6 +4,10 @@
 
 Phase 3 implements the **Speed→Map→POI flow** — the heart of Kimbro's system. Raw speed thoughts are triaged, organized into Points of Interest, and indexed in Subject Maps of Contents (SMOCs) and the Grand Subject Map (GSMOC). This is what turns a pile of captures into structured, navigable knowledge.
 
+## Naming Convention
+
+Throughout this plan, note paths like `{subject}/purpose`, `{subject}/speeds`, `{subject}/POI-03-async-patterns` refer to **Obsidian note names** (no `.md` extension). The Obsidian CLI and wikilinks operate on note names. The underlying filesystem adds `.md` automatically. When the plan refers to a filesystem path explicitly, it will say so.
+
 ## Dependency: Phase 2
 
 Phase 3 depends on Phase 2 modules that don't exist yet:
@@ -34,8 +38,10 @@ def update_smoc(subject: str, poi_entry: str, section: str, obsidian: ObsidianCL
     - poi_entry: e.g. "[[POI-03-async-patterns]] — async/await patterns, from S31-S38"
     - section: one of "Core", "Peripheral", "References"
     - Appends under the correct ### heading
-    - Idempotent: skips if the exact wikilink already exists in the SMOC
-    - Updates the 'updated' frontmatter date
+    - Idempotent: skips if a wikilink to the same target already exists (match on
+      [[TARGET]] destination, not the full descriptive line — avoids duplicates when
+      only the description text changes)
+    - Updates the 'updated' frontmatter date via obsidian.property_set()
     """
 
 def read_gsmoc(obsidian: ObsidianCLI) -> str:
@@ -46,8 +52,9 @@ def update_gsmoc(subject_entry: str, section: str, obsidian: ObsidianCLI) -> Non
 
     - subject_entry: e.g. "[[python/SMOC|python]] — Python programming"
     - section: one of "Active Subjects", "Dormant Subjects", "Emerging"
-    - Idempotent: skips if wikilink already present
-    - Updates the 'updated' frontmatter date
+    - Idempotent: skips if a wikilink to the same target already exists (match on
+      [[TARGET]] destination, not the full descriptive line)
+    - Updates the 'updated' frontmatter date via obsidian.property_set()
     """
 
 def rebuild_smoc(subject: str, obsidian: ObsidianCLI) -> RebuildResult:
@@ -55,7 +62,7 @@ def rebuild_smoc(subject: str, obsidian: ObsidianCLI) -> RebuildResult:
 
     Process:
     1. Read current SMOC content
-    2. Scan subject folder for POI-*.md and REF-*.md files via obsidian search
+    2. Scan subject folder for POI-* and REF-* notes via obsidian.search()
     3. Compare: find POIs/REFs in folder but not in SMOC (new), and in SMOC but not in folder (missing)
     4. Append new entries under appropriate sections
     5. Flag missing entries with a <!-- MISSING: ... --> comment (don't remove — may be intentional archive)
@@ -84,12 +91,16 @@ The SMOC is a markdown file with `### Core`, `### Peripheral`, `### References` 
 4. Append the new entry line before the next heading
 5. Write back via `obsidian.create()` with overwrite (or read + reconstruct + write via obsidian)
 
-**Implementation note:** Since the Obsidian CLI only supports `read`, `create`, `append`, and `rename` (no "replace" or "write"), updating mid-file content requires reading the full content, modifying it in Python, then writing back. We need to decide on the write-back strategy:
-- **Option A:** Use `obsidian.create()` with the updated content (if the CLI supports overwriting existing files)
-- **Option B:** Add a `write` method to `ObsidianCLI` that writes content to an existing file
-- **Option C:** Fall back to direct file write for updates (breaking the "all I/O through CLI" principle)
+**Implementation note:** The `ObsidianCLI` wrapper already supports `read`, `create`, `append`, `rename`, `search`, `property_set`, `property_get`, and `daily_read`/`daily_append`.
 
-**Recommendation:** Option B — add an `ObsidianCLI.write()` method (or use `create` with an `overwrite` flag if the CLI supports it). This is a small Phase 1 addition needed before Phase 3 can work.
+For **frontmatter updates** (e.g., updating the `updated` date field), use `obsidian.property_set(note_name, "updated", date_value)` — no read→modify→write round-trip needed.
+
+For **mid-file content updates** (e.g., inserting a mapping marker into speeds.md, or appending a POI entry under a SMOC section heading), the CLI has no "replace" command, so these require: read full content → modify in Python → write back. Write-back strategy:
+- **Option A:** Use `obsidian.create()` with the updated content (if the CLI supports overwriting existing notes)
+- **Option B:** Add an `ObsidianCLI.write()` method for content replacement
+- **Option C:** Fall back to direct file write (breaking the "all I/O through CLI" principle)
+
+**Recommendation:** Option B — add an `ObsidianCLI.write()` method. Reserve the read→modify→write flow **only** for true mid-file edits; use `property_set` for all frontmatter changes.
 
 ### Tests (test_maps.py)
 
@@ -186,7 +197,7 @@ SPEED_PATTERN = re.compile(
     r"^- S\[(\d+)\]:\s*"           # - S[47]:
     r"(?:\(context:\s*([^)]*)\)\s*)?"  # optional (context: hint)
     r"(.+?)"                        # content
-    r"(?:\s+#thought/(\w[\w-]*))??"  # optional #thought/type
+    r"(?:\s+#thought/(\w[\w-]*))?"   # optional #thought/type
     r"(?:\s+\[→\s*(POI-\d+)\])?"   # optional [→ POI-12]
     r"\s*$"
 )
@@ -224,34 +235,42 @@ def create_poi(
     1. Determine next POI number by scanning subject folder for POI-*.md files
     2. Render the 'poi' template with subject, title, poi_number, date
     3. If synthesized_from provided, populate the synthesized_from frontmatter field
-    4. Create the note: {subject}/POI-{NN}-{slug}.md  (NN zero-padded to 2 digits)
+    4. Create the note via obsidian.create() using the Obsidian note name: {subject}/POI-{NN}-{slug}
+       (NN zero-padded to 2 digits; Obsidian note names omit the .md extension)
     5. Auto-add entry to SMOC under ### Core section
-    6. Return the created note name (e.g. "POI-03-async-patterns")
+    6. Return the created Obsidian note name (e.g. "POI-03-async-patterns")
     """
 
 def create_reference(
     subject: str,
     title: str,
-    author: str,
-    year: int,
-    url: str,
     obsidian: ObsidianCLI,
+    author: str | None = None,
+    year: int | None = None,
+    url: str | None = None,
     notes: str = "",
 ) -> str:
     """Create a numbered reference note and auto-link it in the SMOC.
 
     1. Determine next REF number by scanning subject folder for REF-*.md files
     2. Render the 'reference' template
-    3. Create the note: {subject}/REF-{NN}-{slug}.md
+    3. Create the note via obsidian.create() using the Obsidian note name: {subject}/REF-{NN}-{slug}
+       (Obsidian note names omit the .md extension)
     4. Auto-add entry to SMOC under ### References section
-    5. Return the created note name
+    5. Return the created Obsidian note name
     """
 
 def next_poi_number(subject: str, obsidian: ObsidianCLI) -> int:
-    """Scan subject folder for existing POI-NN-*.md files and return next number."""
+    """Scan subject folder for existing POI-NN-* notes and return next number.
+
+    Uses obsidian.search() to find POI notes; matches against Obsidian note names (no .md extension).
+    """
 
 def next_ref_number(subject: str, obsidian: ObsidianCLI) -> int:
-    """Scan subject folder for existing REF-NN-*.md files and return next number."""
+    """Scan subject folder for existing REF-NN-* notes and return next number.
+
+    Uses obsidian.search() to find REF notes; matches against Obsidian note names (no .md extension).
+    """
 
 def slugify(title: str) -> str:
     """Convert a title to a filename-safe slug: lowercase, hyphens for spaces, strip special chars."""
@@ -300,9 +319,9 @@ def poi(
 def ref(
     subject: str = typer.Argument(...),
     title: str = typer.Argument(...),
-    url: str = typer.Option("", "--url"),
-    author: str = typer.Option("", "--author"),
-    year: int = typer.Option(0, "--year"),
+    url: str | None = typer.Option(None, "--url"),
+    author: str | None = typer.Option(None, "--author"),
+    year: int | None = typer.Option(None, "--year"),
     notes: str = typer.Option("", "--notes"),
 ):
     """Add a reference annotation to a subject."""
@@ -314,7 +333,7 @@ def subjects_pp(
     name: str = typer.Argument(...),
 ):
     """View a subject's Purpose & Principles."""
-    # Read and display {subject}/purpose.md
+    # Read and display the Obsidian note: {subject}/purpose (note name, no .md extension)
 ```
 
 ### Tests (test_cli_phase3.py or extend existing test files)
@@ -339,7 +358,7 @@ def subjects_pp(
 Within Phase 3, the recommended build order is:
 
 1. **ObsidianCLI.write() addition** — needed for mid-file content updates (SMOC/speeds editing). Small change to obsidian.py.
-2. **maps.py — read functions** (`read_smoc`, `read_gsmoc`) — simplest, just wrap obsidian.read()
+2. **maps.py — read functions** (`read_smoc`, `read_gsmoc`) — simplest, just wrap obsidian.read() with Obsidian note names (no .md extension)
 3. **review.py — parsing functions** (`SpeedEntry`, `InboxEntry` dataclasses, `get_unmapped_speeds`, `triage_inbox`) — pure parsing, no writes
 4. **review.py — mutation functions** (`map_speed`, `assign_inbox_entry`) — depend on parsing + ObsidianCLI.write()
 5. **maps.py — update functions** (`update_smoc`, `update_gsmoc`) — SMOC section parsing + insertion
@@ -350,7 +369,7 @@ Within Phase 3, the recommended build order is:
 
 ## Open Design Questions
 
-1. **File content replacement strategy**: The Obsidian CLI has `read`, `create`, `append` but no `update`/`write` for existing files. How do we modify mid-file content (e.g., inserting a mapping marker into speeds.md)? Options:
+1. **File content replacement strategy**: The Obsidian CLI has `read`, `create`, `append`, `rename`, `search`, `property_set`/`property_get`, and `daily` commands — but no `update`/`write` for replacing mid-file content. Frontmatter changes should use `property_set`. For true mid-file edits (e.g., inserting a mapping marker into speeds), options:
    - Add `ObsidianCLI.write()` that does direct file write (breaking pure CLI principle for updates)
    - Check if `obsidian create` supports overwriting existing notes
    - Use a combination of read + delete + create
