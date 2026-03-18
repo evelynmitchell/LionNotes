@@ -99,12 +99,30 @@ class TestCaptureSpeed:
         assert "#thought/observation" in entry
 
     def test_missing_subject_raises(self, tmp_path):
+        """No SMOC means the subject doesn't exist at all."""
         obs = MagicMock()
         obs.read.side_effect = ObsidianCLIError(["read"], 1, "not found")
         config = self._make_config(tmp_path)
 
         with pytest.raises(SubjectError, match="does not exist"):
             capture_speed("A thought", obs, config, subject="nonexistent")
+
+    def test_missing_speeds_file_raises(self, tmp_path):
+        """SMOC exists but speeds file is missing."""
+        obs = MagicMock()
+
+        def read_side_effect(path):
+            if "SMOC" in path:
+                return "# SMOC content"
+            raise ObsidianCLIError(["read"], 1, "not found")
+
+        obs.read.side_effect = read_side_effect
+        config = self._make_config(tmp_path)
+
+        with pytest.raises(SubjectError, match="missing its speeds"):
+            capture_speed(
+                "A thought", obs, config, subject="my-topic",
+            )
 
     def test_empty_content_raises(self, tmp_path):
         obs = MagicMock()

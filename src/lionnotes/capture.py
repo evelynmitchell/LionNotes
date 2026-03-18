@@ -59,16 +59,26 @@ def capture_speed(
         subject = normalize_subject_name(subject)
 
     if subject:
-        # Verify subject exists
+        # Verify subject exists by checking SMOC, then speeds file
         try:
-            obsidian.read(f"{subject}/speeds")
+            obsidian.read(f"{subject}/SMOC")
         except ObsidianCLIError as exc:
             if exc.is_not_found:
                 raise SubjectError(
                     f"Subject '{subject}' does not exist. "
                     "Create it first with 'lionnotes subjects create'."
                 ) from exc
-            raise  # Re-raise real errors (timeouts, permissions, etc.)
+            raise
+
+        try:
+            obsidian.read(f"{subject}/speeds")
+        except ObsidianCLIError as exc:
+            if exc.is_not_found:
+                raise SubjectError(
+                    f"Subject '{subject}' exists but is missing its "
+                    "speeds file. Re-create it or run 'lionnotes doctor'."
+                ) from exc
+            raise
 
         number = next_speed_number(config, subject)
         entry = _format_speed_entry(number, content, hint, thought_type)
