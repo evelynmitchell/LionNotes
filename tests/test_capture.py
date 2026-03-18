@@ -39,6 +39,17 @@ class TestFormatSpeedEntry:
         result = _format_speed_entry(1, "A thought", thought_type="thought/observation")
         assert result == "- S1: A thought #thought/observation"
 
+    def test_empty_type_after_normalization_skipped(self):
+        """'#' or 'thought/' normalizes to empty — no tag appended."""
+        expected = "- S1: A thought"
+        assert _format_speed_entry(1, "A thought", thought_type="#") == expected
+        assert _format_speed_entry(
+            1, "A thought", thought_type="thought/",
+        ) == expected
+        assert _format_speed_entry(
+            1, "A thought", thought_type="# ",
+        ) == expected
+
 
 class TestCaptureSpeed:
     def _make_config(self, tmp_path):
@@ -161,3 +172,11 @@ class TestCaptureSpeed:
 
         with pytest.raises(ObsidianCLIError, match="timed out"):
             capture_speed("A thought", obs, config, subject="my-topic")
+
+    def test_empty_string_subject_raises(self, tmp_path):
+        """Empty string subject should error, not silently go to inbox."""
+        obs = MagicMock()
+        config = self._make_config(tmp_path)
+
+        with pytest.raises(SubjectError, match="cannot be empty"):
+            capture_speed("A thought", obs, config, subject="")

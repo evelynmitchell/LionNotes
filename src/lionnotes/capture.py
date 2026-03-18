@@ -29,7 +29,8 @@ def _format_speed_entry(
         tt = thought_type.lstrip("#").strip()
         if tt.startswith("thought/"):
             tt = tt[len("thought/") :]
-        parts.append(f"#thought/{tt}")
+        if tt:
+            parts.append(f"#thought/{tt}")
 
     return " ".join(parts)
 
@@ -55,7 +56,7 @@ def capture_speed(
         raise ValueError("Capture content cannot be empty.")
 
     # Normalize subject name to ensure consistent counter keys and paths
-    if subject:
+    if subject is not None:
         subject = normalize_subject_name(subject)
 
     if subject:
