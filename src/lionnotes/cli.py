@@ -449,21 +449,19 @@ def subjects_list(
         )
         return
 
+    # Build tier lookup once to avoid redundant subprocess calls
+    tier_map = {s: get_tier(s, obsidian) for s in subjects}
+
     # Filter out archived subjects unless --all is passed
     if not all_subjects:
-        filtered = []
-        for s in subjects:
-            tier = get_tier(s, obsidian)
-            if tier != "archive":
-                filtered.append(s)
-        subjects = filtered
+        subjects = [s for s in subjects if tier_map[s] != "archive"]
         if not subjects:
             typer.echo("No active subjects. Use --all to include archived.")
             return
 
     typer.echo(f"Subjects ({len(subjects)}):")
     for s in subjects:
-        tier = get_tier(s, obsidian)
+        tier = tier_map[s]
         if tier == "common-store":
             typer.echo(f"  - {s} [common]")
         elif tier == "archive":
@@ -534,17 +532,28 @@ def search(
 
         # Filter out archived subjects unless --include-archived
         if not include_archived:
-            archived = set()
-            tiers = list_tiers(obsidian)
-            archived = set(tiers.get("archive", []))
-            if archived:
-                filtered = []
-                for line in lines:
-                    segments = line.strip().replace("\\", "/").split("/")
-                    # Check if any segment matches an archived subject
-                    if not any(seg in archived for seg in segments):
-                        filtered.append(line)
-                lines = filtered
+            if subject:
+                # Subject-scoped: only check that one subject's tier
+                try:
+                    subj_name = normalize_subject_name(subject)
+                except SubjectError:
+                    subj_name = subject.strip().lower().replace(" ", "-")
+                if get_tier(subj_name, obsidian) == "archive":
+                    typer.echo(
+                        f"Subject '{subject}' is archived."
+                        " Use --include-archived to search it."
+                    )
+                    return
+            else:
+                tiers = list_tiers(obsidian)
+                archived = set(tiers.get("archive", []))
+                if archived:
+                    filtered = []
+                    for line in lines:
+                        segments = line.strip().replace("\\", "/").split("/")
+                        if not any(seg in archived for seg in segments):
+                            filtered.append(line)
+                    lines = filtered
 
         # Filter by subject if specified (path-segment match)
         if subject:

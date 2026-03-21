@@ -8,7 +8,7 @@ frontmatter property on the subject's SMOC note.
 from __future__ import annotations
 
 from lionnotes.obsidian import ObsidianCLI, ObsidianCLIError
-from lionnotes.subjects import list_subjects, normalize_subject_name
+from lionnotes.subjects import SubjectError, list_subjects, normalize_subject_name
 
 VALID_TIERS = ("carry-about", "common-store", "archive")
 DEFAULT_TIER = "carry-about"
@@ -24,14 +24,18 @@ def get_tier(subject: str, obsidian: ObsidianCLI) -> str:
 
     Returns DEFAULT_TIER ("carry-about") if no tier property is set.
     """
-    normalized = normalize_subject_name(subject)
+    try:
+        normalized = normalize_subject_name(subject)
+    except SubjectError:
+        return DEFAULT_TIER
     try:
         value = obsidian.property_get(f"{normalized}/SMOC", TIER_PROPERTY)
         value = value.strip()
         if value in VALID_TIERS:
             return value
-    except ObsidianCLIError:
-        pass
+    except ObsidianCLIError as exc:
+        if not exc.is_not_found:
+            raise
     return DEFAULT_TIER
 
 
