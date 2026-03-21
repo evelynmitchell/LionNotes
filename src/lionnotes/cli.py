@@ -100,7 +100,7 @@ def init(
     ),
 ):
     """Initialize a new LionNotes vault (or adopt an existing one)."""
-    vp = Path(vault_path).resolve()
+    vp = Path(vault_path).expanduser().resolve()
     if not vp.is_dir():
         typer.echo(f"Error: {vault_path} is not a directory.", err=True)
         raise typer.Exit(1)
@@ -211,7 +211,7 @@ def doctor(
     config: Config | None = None
     vp: Path | None = None
     if vault_path:
-        vp = Path(vault_path).resolve()
+        vp = Path(vault_path).expanduser().resolve()
         config_file = vp / ".lionnotes.toml"
         if config_file.is_file():
             config = load_config(config_file)
@@ -321,7 +321,7 @@ def _resolve_config(vault_path: str | None = None) -> Config:
     """Find and load the LionNotes config."""
     err_msg = "Error: No .lionnotes.toml found. Run 'lionnotes init' first."
     if vault_path:
-        config_file = Path(vault_path).resolve() / ".lionnotes.toml"
+        config_file = Path(vault_path).expanduser().resolve() / ".lionnotes.toml"
         if not config_file.is_file():
             typer.echo(err_msg, err=True)
             raise typer.Exit(1)
@@ -477,9 +477,11 @@ def search(
                 normalized_subj = normalize_subject_name(subject)
             except SubjectError:
                 # Fall back to basic normalization for search
-                normalized_subj = (
-                    subject.strip().lower().replace(" ", "-")
-                )
+                # (e.g. user searching within _inbox or other reserved names)
+                normalized = subject.strip().lower().replace(" ", "-")
+                while "--" in normalized:
+                    normalized = normalized.replace("--", "-")
+                normalized_subj = normalized
             filtered_lines = []
             for line in results.strip().splitlines():
                 # Split into path segments for exact folder matching
