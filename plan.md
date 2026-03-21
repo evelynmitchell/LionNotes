@@ -4,6 +4,18 @@
 
 Phase 4 adds five feature groups: **strategy**, **cache**, **index**, **alias**, and **subjects merge/split/promote**. Each follows the established pattern: core logic in a dedicated module, CLI commands in `cli.py`, unit tests for core logic, CLI integration tests in `test_cli_phase4.py`.
 
+### Mutation strategy
+
+The `ObsidianCLI` API has no overwrite/update primitive — only `read`, `create`, `append`, `rename`, and `delete`. Modules that need to modify note content (strategy, alias, index) use the **rename-aside-then-create** pattern already established by `maps._write_note()`:
+
+1. Read the current note content via `obsidian.read()`
+2. Modify the content in memory
+3. Rename the old note aside (e.g., `note` → `note-backup-{timestamp}`)
+4. Create the new note with `obsidian.create()` using the modified content
+5. Delete the backup via `obsidian.delete()`
+
+This pattern is used by strategy (`complete_priority`), alias (`set_alias`, `remove_alias`), and index (`build_index` on rebuild). The `add_priority` function uses `obsidian.append()` directly since it only adds content.
+
 ---
 
 ## Step 1: `lionnotes strategy` — Priority Management
@@ -48,7 +60,7 @@ Manages the carry-about / common-store / archive tiers. There are two distinct l
 1. **Subject-level tiers** (carry-about / common-store / archive) — stored as a frontmatter property (`tier`) on the subject's SMOC note via `obsidian.property_set/property_get`. This controls how prominently the subject appears in listings and GSMOC display. All three tiers remain searchable.
 2. **Note-level archival** — individual notes within a subject can be moved to `{subject}/_archive/`. This is for decluttering a subject's active workspace without losing content.
 
-The `cache` command manages subject-level tiers. Note-level archival happens through `subjects split` (moving notes out) or future note-management commands.
+The `cache` command manages subject-level tiers. Note-level archival is a separate concern — moving individual notes into `{subject}/_archive/` via `obsidian.rename()`. A future `lionnotes archive NOTE` command could handle this; it is not in Phase 4 scope. (`subjects split` creates new subjects, which is a different operation.)
 
 **Search behavior by tier:**
 - **carry-about** (default): included in all search results, shown first in listings
@@ -60,7 +72,7 @@ The `cache` command manages subject-level tiers. Note-level archival happens thr
 - `set_tier(subject, tier, obsidian) -> None` — update SMOC frontmatter; validates tier is one of `carry-about`, `common-store`, `archive`
 - `list_tiers(obsidian) -> dict[str, list[str]]` — all subjects grouped by tier
 - `archive_subject(subject, obsidian) -> None` — set tier to "archive"
-- `promote_subject(subject, obsidian) -> None` — set tier to "carry-about"
+- `activate_subject(subject, obsidian) -> None` — set tier to "carry-about"
 
 **CLI commands** (new `cache_app` Typer group):
 - `lionnotes cache status` — show subjects by tier
@@ -90,15 +102,19 @@ Scans all notes in a subject folder, extracts keywords (wikilinks + #tags), and 
 ```markdown
 ---
 type: index
-subject: "subject-name"
-updated: "2026-03-21"
+subject: "{{subject}}"
+updated: "{{date}}"
 ---
-# subject-name — Index
+# {{subject}} — Index
 
 ## Keywords
 - **keyword-a**: [[POI-01-foo]], [[POI-03-bar]]
 - **keyword-b**: [[REF-01-baz]]
 ```
+
+An `index` template will be added to `templates.py` with required variable `subject`.
+
+**Rebuild behavior:** If `{subject}/Index` already exists, uses the rename-aside-then-create pattern (see Mutation strategy above) to replace it. The index is always fully regenerated, not incrementally updated.
 
 **CLI command:**
 - `lionnotes index SUBJECT` — build/rebuild the index for a subject
@@ -115,8 +131,8 @@ Manages abbreviations in the Global Aliases note and per-subject glossary notes.
 
 **Functions:**
 - `list_aliases(obsidian, subject=None) -> list[Alias]` — parse global or per-subject aliases
-- `set_alias(abbr, expansion, obsidian, subject=None) -> None` — add/update alias
-- `remove_alias(abbr, obsidian, subject=None) -> None` — remove alias
+- `set_alias(abbr, expansion, obsidian, subject=None) -> None` — add/update alias (uses rename-aside-then-create when updating an existing alias; uses `obsidian.append()` when adding a new one)
+- `remove_alias(abbr, obsidian, subject=None) -> None` — remove alias (uses rename-aside-then-create to rewrite the note without the removed entry)
 
 **Dataclass:**
 ```python
@@ -164,14 +180,19 @@ Merge one subject into another. This is a bulk operation that moves many files �
 **Dataclass:**
 ```python
 @dataclass
+class MoveFailure:
+    note: str              # note that failed to move
+    reason: str            # why it failed
+
+@dataclass
 class MergeResult:
-    moved: list[str]       # notes successfully moved
-    failed: list[str]      # notes that failed to move (with reason)
-    skipped: list[str]     # notes skipped (e.g., already in target)
+    moved: list[str]           # notes successfully moved
+    failed: list[MoveFailure]  # notes that failed to move, with reasons
+    skipped: list[str]         # notes skipped (e.g., already in target)
     out_card_created: bool
 ```
 
-### 5b: `subjects split NAME`
+### 5b: `subjects split SOURCE --into NEW_SUBJECT --notes "..."`
 
 Split a subject into two. Since this is inherently interactive (which notes go where), the CLI takes a new subject name and a list of note patterns to move. Uses the same **plan-execute-report** pattern as merge.
 
@@ -185,6 +206,15 @@ Split a subject into two. Since this is inherently interactive (which notes go w
 5. **Report phase**: return `SplitResult` with moved/failed lists.
 
 **Function:** `split_subject(source, new_name, note_patterns, obsidian, config) -> SplitResult`
+
+**Dataclass:**
+```python
+@dataclass
+class SplitResult:
+    new_subject: str           # normalized name of the new subject
+    moved: list[str]           # notes successfully moved
+    failed: list[MoveFailure]  # notes that failed to move, with reasons
+```
 
 ### 5c: `subjects promote`
 
