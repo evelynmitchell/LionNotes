@@ -43,21 +43,35 @@ class StrategyItem:
 
 **New file:** `src/lionnotes/cache.py`
 
-Manages the carry-about / common-store / archive tiers. The tier is stored as a frontmatter property (`tier`) on the subject's SMOC note, using `obsidian.property_set/property_get`. Archive moves notes into `{subject}/_archive/` subfolder.
+Manages the carry-about / common-store / archive tiers. There are two distinct layers:
+
+1. **Subject-level tiers** (carry-about / common-store / archive) — stored as a frontmatter property (`tier`) on the subject's SMOC note via `obsidian.property_set/property_get`. This controls how prominently the subject appears in listings and GSMOC display. All three tiers remain searchable.
+2. **Note-level archival** — individual notes within a subject can be moved to `{subject}/_archive/`. This is for decluttering a subject's active workspace without losing content.
+
+The `cache` command manages subject-level tiers. Note-level archival happens through `subjects split` (moving notes out) or future note-management commands.
+
+**Search behavior by tier:**
+- **carry-about** (default): included in all search results, shown first in listings
+- **common-store**: included in search results, shown in listings with `[common]` marker
+- **archive**: excluded from search results by default; `lionnotes search --include-archived` includes them. Shown in `cache status` but omitted from `subjects list` unless `--all` is passed
 
 **Functions:**
-- `get_tier(subject, obsidian) -> str` — read tier from SMOC frontmatter (default: "active")
-- `set_tier(subject, tier, obsidian) -> None` — update SMOC frontmatter
+- `get_tier(subject, obsidian) -> str` — read tier from SMOC frontmatter (default: "carry-about")
+- `set_tier(subject, tier, obsidian) -> None` — update SMOC frontmatter; validates tier is one of `carry-about`, `common-store`, `archive`
 - `list_tiers(obsidian) -> dict[str, list[str]]` — all subjects grouped by tier
 - `archive_subject(subject, obsidian) -> None` — set tier to "archive"
-- `promote_subject(subject, obsidian) -> None` — set tier to "active"
+- `promote_subject(subject, obsidian) -> None` — set tier to "carry-about"
 
 **CLI commands** (new `cache_app` Typer group):
 - `lionnotes cache status` — show subjects by tier
 - `lionnotes cache archive SUBJECT` — move to archive tier
-- `lionnotes cache promote SUBJECT` — move to active tier
+- `lionnotes cache promote SUBJECT` — move to carry-about tier
 
-**Tests:** `test_cache.py` (unit), cache section in `test_cli_phase4.py`
+**Changes to existing commands:**
+- `lionnotes subjects list` — add `--all` flag; default hides archived subjects
+- `lionnotes search` — add `--include-archived` flag; default excludes archived tier subjects
+
+**Tests:** `test_cache.py` (unit), cache section in `test_cli_phase4.py`. Tests must cover search filtering by tier and `subjects list` filtering.
 
 ---
 
@@ -128,9 +142,18 @@ class Alias:
 
 ### 5a: `subjects merge SOURCE TARGET`
 
-Merge one subject into another:
+Merge one subject into another. This is a bulk operation that moves many files — a failure mid-sequence could leave broken state. Uses a **plan-execute-report** pattern (see corner case #12):
+
+**Execution model:**
+1. **Plan phase**: read both SMOCs, enumerate all POI/REF/speed files in source, compute renumbered names in target, detect collisions. No mutations yet.
+2. **Validate phase**: confirm target exists, source has content, no naming collisions after renumbering. Abort with full report if validation fails.
+3. **Execute phase**: perform moves one at a time via `obsidian.rename()`. Track each success/failure in a `MergeResult`.
+4. **Finalize phase**: update target SMOC (merge entries), update GSMOC (remove source, ensure target listed), create out card at `{source}/SMOC`, update config speed counters.
+5. **Report phase**: return `MergeResult` listing moved/failed/skipped notes. If any moves failed, the CLI prints what succeeded and what didn't — no silent partial state.
+
+**Steps:**
 - Move all POI/REF notes from source to target (renumber to avoid collisions)
-- Append source speeds to target speeds (renumber)
+- Append source speeds to target speeds (renumber into target's sequence)
 - Merge source SMOC entries into target SMOC
 - Remove source from GSMOC, ensure target is listed
 - Create an "out card" note at `{source}/SMOC` pointing to target
@@ -138,15 +161,28 @@ Merge one subject into another:
 
 **Function:** `merge_subjects(source, target, obsidian, config) -> MergeResult`
 
+**Dataclass:**
+```python
+@dataclass
+class MergeResult:
+    moved: list[str]       # notes successfully moved
+    failed: list[str]      # notes that failed to move (with reason)
+    skipped: list[str]     # notes skipped (e.g., already in target)
+    out_card_created: bool
+```
+
 ### 5b: `subjects split NAME`
 
-Split a subject into two. Since this is inherently interactive (which notes go where), the CLI takes a new subject name and a list of note patterns to move.
+Split a subject into two. Since this is inherently interactive (which notes go where), the CLI takes a new subject name and a list of note patterns to move. Uses the same **plan-execute-report** pattern as merge.
 
 - `lionnotes subjects split SOURCE --into NEW_SUBJECT --notes "POI-01,POI-02,REF-01"`
-- Creates new subject structure
-- Moves specified notes to new subject (renumber)
-- Updates both SMOCs
-- Adds new subject to GSMOC
+
+**Execution model:**
+1. **Plan phase**: resolve note patterns against source folder, compute renumbered names in new subject.
+2. **Validate phase**: confirm source exists, patterns match at least one note, new subject name passes `normalize_subject_name()` validation. Abort with report if validation fails.
+3. **Execute phase**: create new subject structure, move specified notes (renumber), track results.
+4. **Finalize phase**: update source SMOC (remove moved entries), populate new subject's SMOC, add new subject to GSMOC.
+5. **Report phase**: return `SplitResult` with moved/failed lists.
 
 **Function:** `split_subject(source, new_name, note_patterns, obsidian, config) -> SplitResult`
 
@@ -154,10 +190,15 @@ Split a subject into two. Since this is inherently interactive (which notes go w
 
 Promote a proto-subject from `_inbox/` or unplaced notes to a full subject:
 - `lionnotes subjects promote NAME` — creates full subject structure and moves any matching speeds from inbox
+- Name is validated through `normalize_subject_name()` before any mutations (corner case #11)
+- Matching inbox entries are identified by subject hint in their context field (e.g., `(context: python)` matches promoting to subject `python`)
 
 **Function:** `promote_subject(name, obsidian, config) -> str`
 
-**Tests:** `test_subjects_advanced.py` (unit), subjects section in `test_cli_phase4.py`
+**Tests:** `test_subjects_advanced.py` (unit), subjects section in `test_cli_phase4.py`. Tests must cover:
+- Partial failure in merge (some moves succeed, some fail) — verify report is accurate
+- Split with invalid new subject name — verify validation catches it before any mutations
+- Promote with name that collides with reserved names — verify rejection
 
 ---
 
@@ -186,6 +227,20 @@ Final validation: `pytest` and `ruff check src/ tests/` pass clean.
 5. **Subjects merge/split/promote** (most complex — depends on all prior patterns)
 
 Each step: implement core module → add CLI commands → write tests → run `pytest` + `ruff check` to verify.
+
+---
+
+## Corner Cases Addressed
+
+This plan addresses the following items from `docs/corner-cases-review.md`:
+
+| # | Corner Case | How Addressed |
+|---|---|---|
+| #4 | SMOC/GSMOC staleness | Merge/split finalize phase explicitly updates both SMOCs and GSMOC. Out cards prevent dangling references to merged subjects. |
+| #8 | Archive semantics underspecified | Clarified two-layer model: subject-level tiers (carry/common/archive) vs. note-level `_archive/`. Defined search behavior per tier. Added `--include-archived` and `--all` flags. |
+| #10 | Multi-agent concurrency | Remains deferred. Risk surface grows (strategy, alias files are shared append targets) but solving this properly requires optimistic locking in `obsidian.py`, which is out of scope. |
+| #11 | Subject naming constraints | Already enforced by `normalize_subject_name()`. Promote validates name before any mutations. Split validates new subject name in plan phase. |
+| #12 | Bulk move transaction safety | Merge and split use plan-execute-report pattern. All moves planned and validated before execution. Partial failures reported with full accounting of what succeeded/failed. No silent partial state. |
 
 ---
 
