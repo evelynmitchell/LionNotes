@@ -10,6 +10,12 @@ from pathlib import Path
 import typer
 
 from lionnotes import __version__
+from lionnotes.alias import (
+    AliasError,
+    list_aliases,
+    remove_alias,
+    set_alias,
+)
 from lionnotes.cache import (
     CacheError,
     activate_subject,
@@ -1005,5 +1011,92 @@ def index_cmd(
         typer.echo(f"Built index for {normalized}")
         typer.echo(f"  + {normalized}/Index")
     except (IndexBuildError, SubjectError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- alias ------------------------------------------------------------------
+
+alias_app = typer.Typer(
+    name="alias",
+    help="Manage abbreviations (global and per-subject).",
+    no_args_is_help=True,
+)
+app.add_typer(alias_app)
+
+
+@alias_app.command("list")
+def alias_list(
+    subject: str | None = typer.Option(
+        None,
+        "--subject",
+        "-s",
+        help="List per-subject aliases instead of global.",
+    ),
+):
+    """List aliases (global or per-subject)."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        normalized = normalize_subject_name(subject) if subject else None
+        aliases = list_aliases(obsidian, subject=normalized)
+        scope = normalized or "global"
+        if not aliases:
+            typer.echo(f"No aliases ({scope}).")
+            return
+        typer.echo(f"Aliases ({scope}, {len(aliases)}):")
+        for a in aliases:
+            typer.echo(f"  **{a.abbreviation}**: {a.expansion}")
+    except (AliasError, SubjectError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+@alias_app.command("set")
+def alias_set(
+    abbr: str = typer.Argument(..., help="Abbreviation."),
+    expansion: str = typer.Argument(..., help="Expanded form."),
+    subject: str | None = typer.Option(
+        None,
+        "--subject",
+        "-s",
+        help="Set per-subject alias instead of global.",
+    ),
+):
+    """Set an alias (add or update)."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        normalized = normalize_subject_name(subject) if subject else None
+        set_alias(abbr, expansion, obsidian, subject=normalized)
+        scope = normalized or "global"
+        typer.echo(f"Set alias ({scope}): {abbr} -> {expansion}")
+    except (AliasError, SubjectError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+@alias_app.command("remove")
+def alias_remove(
+    abbr: str = typer.Argument(..., help="Abbreviation to remove."),
+    subject: str | None = typer.Option(
+        None,
+        "--subject",
+        "-s",
+        help="Remove per-subject alias instead of global.",
+    ),
+):
+    """Remove an alias."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        normalized = normalize_subject_name(subject) if subject else None
+        remove_alias(abbr, obsidian, subject=normalized)
+        scope = normalized or "global"
+        typer.echo(f"Removed alias ({scope}): {abbr}")
+    except (AliasError, SubjectError, ObsidianCLIError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
