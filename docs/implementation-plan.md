@@ -135,7 +135,7 @@ Capture a speed thought (the core daily operation):
 - If pan-subject (no `-s`), appends to `_inbox/unsorted.md` for later triage
 - Each speed page (`speeds.md`) has frontmatter: `type: speeds`, `subject`, `entry_count`, `last_entry`
 - Each entry within the page follows the format: `- S[N]: (context: hint) content #thought/type`
-- Mapped entries are suffixed with `[→ POI-N]` (e.g., `[→ POI-07]`); unmapped entries have no suffix
+- Mapped entries are suffixed with `[→ POI-N]` (e.g., `[→ POI-07]`); unmapped entries have no suffix. This inline suffix is the sole marking mechanism — there is no separate `mapped` frontmatter field
 
 ### `lionnotes review`
 Interactive triage of unmapped speed thoughts:
@@ -144,8 +144,8 @@ Interactive triage of unmapped speed thoughts:
 - For each unmapped speed:
   - Show content, hint, context
   - Options: **map** (place on SMOC), **expand** (start a POI), **skip**, **archive**
-  - On map: add wikilink to subject's SMOC, mark `mapped: true`
-  - On expand: create new POI note, link from SMOC
+  - On map: add wikilink to subject's SMOC, mark speed with `[→ POI-N]` suffix
+  - On expand: create new POI note, link from SMOC, mark speed with `[→ POI-N]` suffix
 
 ### `lionnotes subjects`
 Manage the subject taxonomy:
@@ -408,7 +408,7 @@ expanded: false
 - `lionnotes map` — SMOC generation & viewing
 - `lionnotes poi` — POI creation
 - `lionnotes subjects pp` — Purpose & Principles
-- `lionnotes gsmoc` — GSMOC auto-generation
+- `lionnotes map` (no args) — GSMOC viewing/auto-generation (not a separate `gsmoc` command)
 - `lionnotes ref` — reference management
 
 ### Phase 4: Advanced Features

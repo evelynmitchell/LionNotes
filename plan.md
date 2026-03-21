@@ -84,28 +84,32 @@ The implementation plan doc defines 6 phases. Here's the concrete coding plan fo
 
 ### Phase 3: Organization & Review — `maps.py`, `review.py`, POI, refs
 
+**Build order:** 3a (`maps.py`) must be implemented first — both `review.py` (3b) and the POI/ref commands (3c) depend on it for SMOC updates.
+
 **3a. `src/lionnotes/maps.py`** — SMOC/GSMOC generation
 - `read_smoc(subject, obsidian)` — read and parse a subject's SMOC
 - `update_smoc(subject, poi_entry, obsidian)` — add a POI link to a SMOC
 - `read_gsmoc(obsidian)` — read the grand map
 - `update_gsmoc(subject_entry, obsidian)` — add a subject to GSMOC
-- `rebuild_smoc(subject, obsidian)` — merge-based rebuild (detect new/missing, preserve existing)
-- Tests: SMOC parsing, update idempotency, rebuild merge logic
+- `rebuild_smoc(subject, obsidian)` — merge-based rebuild: scans the subject folder for POI/REF files, compares against existing SMOC entries, adds new entries, flags missing files (but preserves their SMOC entries with a `[missing]` marker rather than deleting them), and preserves any manual ordering/annotations. See corner case #4 in `docs/corner-cases-review.md`
+- Tests: SMOC parsing, update idempotency, rebuild merge logic, rebuild preserves manual annotations, rebuild flags missing files
 
 **3b. `src/lionnotes/review.py`** — Triage workflow
-- `get_unmapped_speeds(subject, obsidian)` — parse speeds.md, return unmapped entries
-- `map_speed(subject, speed_num, poi_ref, obsidian)` — mark a speed as mapped (`[→ POI-N]`)
+- `get_unmapped_speeds(subject, obsidian)` — delegates to `vault.py` speed-parsing helpers, returns full entry objects (not just count)
+- `map_speed(subject, speed_num, poi_ref, obsidian)` — mark a speed as mapped by appending inline `[→ POI-N]` suffix (consistent with Phase 2 convention; no separate `mapped` frontmatter field)
 - `triage_inbox(obsidian)` — list inbox entries for assignment
-- `assign_inbox_entry(entry, target_subject, obsidian, config)` — move from inbox to subject speeds
+- `assign_inbox_entry(entry, target_subject, obsidian, config)` — move from inbox to subject speeds (renumbers into target subject's sequence)
 - CLI: `lionnotes review` with `--subject/-s` and `--pan` flags
 - Tests: unmapped parsing, mapping marks correctly, inbox assignment
+- **Depends on:** `maps.py` (3a) — the "map" and "expand" actions both update the SMOC
 
 **3c. POI and reference commands**
 - `lionnotes poi SUBJECT TITLE` — create numbered POI, auto-link from SMOC
 - `lionnotes ref SUBJECT TITLE` with `--url`, `--author`, `--year`, `--notes`
-- `lionnotes map [SUBJECT]` — view SMOC or GSMOC
+- `lionnotes map [SUBJECT]` — view SMOC (with subject) or GSMOC (no args). There is no separate `gsmoc` command
 - `lionnotes subjects pp NAME` — view/edit purpose & principles
 - Tests: POI numbering, ref numbering, SMOC auto-linking
+- **Depends on:** `maps.py` (3a) — POI creation and ref linking both update the SMOC
 
 ---
 
