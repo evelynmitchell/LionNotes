@@ -165,9 +165,7 @@ class TestCacheStatus:
     def test_shows_tiers(self, mock_env):
         config, obs = mock_env
         # list_subjects uses search
-        obs.search.return_value = (
-            "python/SMOC.md\nrust/SMOC.md\nold-stuff/SMOC.md\n"
-        )
+        obs.search.return_value = "python/SMOC.md\nrust/SMOC.md\nold-stuff/SMOC.md\n"
 
         def prop_get(file, name):
             if file == "python/SMOC" and name == "tier":
@@ -192,9 +190,7 @@ class TestCacheStatus:
 
     def test_empty_vault(self, mock_env):
         config, obs = mock_env
-        obs.search.side_effect = ObsidianCLIError(
-            ["search"], 1, "no results"
-        )
+        obs.search.side_effect = ObsidianCLIError(["search"], 1, "no results")
 
         result = runner.invoke(app, ["cache", "status"])
 
@@ -211,15 +207,11 @@ class TestCacheArchive:
 
         assert result.exit_code == 0
         assert "Archived: python" in result.output
-        obs.property_set.assert_called_once_with(
-            "python/SMOC", "tier", "archive"
-        )
+        obs.property_set.assert_called_once_with("python/SMOC", "tier", "archive")
 
     def test_subject_not_found(self, mock_env):
         config, obs = mock_env
-        obs.read.side_effect = ObsidianCLIError(
-            ["read"], 1, "not found"
-        )
+        obs.read.side_effect = ObsidianCLIError(["read"], 1, "not found")
 
         result = runner.invoke(app, ["cache", "archive", "nonexistent"])
 
@@ -236,9 +228,7 @@ class TestCachePromote:
 
         assert result.exit_code == 0
         assert "Promoted: python" in result.output
-        obs.property_set.assert_called_once_with(
-            "python/SMOC", "tier", "carry-about"
-        )
+        obs.property_set.assert_called_once_with("python/SMOC", "tier", "carry-about")
 
 
 class TestCacheSet:
@@ -246,9 +236,7 @@ class TestCacheSet:
         config, obs = mock_env
         obs.read.return_value = "smoc content"
 
-        result = runner.invoke(
-            app, ["cache", "set", "python", "common-store"]
-        )
+        result = runner.invoke(app, ["cache", "set", "python", "common-store"])
 
         assert result.exit_code == 0
         assert "Set python to common-store" in result.output
@@ -256,9 +244,7 @@ class TestCacheSet:
     def test_invalid_tier(self, mock_env):
         config, obs = mock_env
 
-        result = runner.invoke(
-            app, ["cache", "set", "python", "invalid"]
-        )
+        result = runner.invoke(app, ["cache", "set", "python", "invalid"])
 
         assert result.exit_code == 1
         assert "Invalid tier" in result.output
@@ -277,18 +263,14 @@ class TestCacheNoArgs:
 class TestSubjectsListTierFiltering:
     def test_hides_archived_by_default(self, mock_env):
         config, obs = mock_env
-        obs.search.return_value = (
-            "python/SMOC.md\nold-stuff/SMOC.md\n"
-        )
+        obs.search.return_value = "python/SMOC.md\nold-stuff/SMOC.md\n"
 
         def prop_get(file, name):
             if file == "python/SMOC" and name == "tier":
                 return "carry-about"
             if file == "old-stuff/SMOC" and name == "tier":
                 return "archive"
-            raise ObsidianCLIError(
-                ["property:get"], 1, "not found"
-            )
+            raise ObsidianCLIError(["property:get"], 1, "not found")
 
         obs.property_get.side_effect = prop_get
 
@@ -300,18 +282,14 @@ class TestSubjectsListTierFiltering:
 
     def test_shows_all_with_flag(self, mock_env):
         config, obs = mock_env
-        obs.search.return_value = (
-            "python/SMOC.md\nold-stuff/SMOC.md\n"
-        )
+        obs.search.return_value = "python/SMOC.md\nold-stuff/SMOC.md\n"
 
         def prop_get(file, name):
             if file == "python/SMOC" and name == "tier":
                 return "carry-about"
             if file == "old-stuff/SMOC" and name == "tier":
                 return "archive"
-            raise ObsidianCLIError(
-                ["property:get"], 1, "not found"
-            )
+            raise ObsidianCLIError(["property:get"], 1, "not found")
 
         obs.property_get.side_effect = prop_get
 
@@ -341,9 +319,7 @@ class TestSubjectsListTierFiltering:
 class TestSearchTierFiltering:
     def test_excludes_archived_by_default(self, mock_env):
         config, obs = mock_env
-        obs.search.return_value = (
-            "python/speeds.md\nold-stuff/speeds.md\n"
-        )
+        obs.search.return_value = "python/speeds.md\nold-stuff/speeds.md\n"
 
         # list_tiers calls list_subjects then get_tier for each
         # We need search called twice: once for the search query,
@@ -363,9 +339,7 @@ class TestSearchTierFiltering:
         def prop_get(file, name):
             if file == "old-stuff/SMOC" and name == "tier":
                 return "archive"
-            raise ObsidianCLIError(
-                ["property:get"], 1, "not found"
-            )
+            raise ObsidianCLIError(["property:get"], 1, "not found")
 
         obs.property_get.side_effect = prop_get
 
@@ -388,15 +362,11 @@ class TestSearchTierFiltering:
         def prop_get(file, name):
             if file == "old-stuff/SMOC" and name == "tier":
                 return "archive"
-            raise ObsidianCLIError(
-                ["property:get"], 1, "not found"
-            )
+            raise ObsidianCLIError(["property:get"], 1, "not found")
 
         obs.property_get.side_effect = prop_get
 
-        result = runner.invoke(
-            app, ["search", "--include-archived", "speeds"]
-        )
+        result = runner.invoke(app, ["search", "--include-archived", "speeds"])
 
         assert result.exit_code == 0
         assert "python" in result.output

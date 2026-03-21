@@ -65,9 +65,7 @@ class TestGetTier:
 
         get_tier("My Subject", obs)
 
-        obs.property_get.assert_called_once_with(
-            "my-subject/SMOC", "tier"
-        )
+        obs.property_get.assert_called_once_with("my-subject/SMOC", "tier")
 
 
 class TestSetTier:
@@ -77,9 +75,7 @@ class TestSetTier:
 
         set_tier("python", "archive", obs)
 
-        obs.property_set.assert_called_once_with(
-            "python/SMOC", "tier", "archive"
-        )
+        obs.property_set.assert_called_once_with("python/SMOC", "tier", "archive")
 
     def test_invalid_tier_raises(self):
         obs = MagicMock()
@@ -96,9 +92,7 @@ class TestSetTier:
 
     def test_subject_not_found_raises(self):
         obs = MagicMock()
-        obs.read.side_effect = ObsidianCLIError(
-            ["read"], 1, "not found"
-        )
+        obs.read.side_effect = ObsidianCLIError(["read"], 1, "not found")
 
         with pytest.raises(CacheError, match="not found"):
             set_tier("nonexistent", "archive", obs)
@@ -110,15 +104,11 @@ class TestSetTier:
         set_tier("My Subject", "archive", obs)
 
         obs.read.assert_called_once_with("my-subject/SMOC")
-        obs.property_set.assert_called_once_with(
-            "my-subject/SMOC", "tier", "archive"
-        )
+        obs.property_set.assert_called_once_with("my-subject/SMOC", "tier", "archive")
 
     def test_reraises_non_not_found_errors(self):
         obs = MagicMock()
-        obs.read.side_effect = ObsidianCLIError(
-            ["read"], 1, "permission denied"
-        )
+        obs.read.side_effect = ObsidianCLIError(["read"], 1, "permission denied")
 
         with pytest.raises(ObsidianCLIError):
             set_tier("python", "archive", obs)
@@ -176,9 +166,7 @@ class TestArchiveSubject:
 
         archive_subject("python", obs)
 
-        obs.property_set.assert_called_once_with(
-            "python/SMOC", "tier", "archive"
-        )
+        obs.property_set.assert_called_once_with("python/SMOC", "tier", "archive")
 
 
 class TestActivateSubject:
@@ -188,6 +176,4 @@ class TestActivateSubject:
 
         activate_subject("python", obs)
 
-        obs.property_set.assert_called_once_with(
-            "python/SMOC", "tier", "carry-about"
-        )
+        obs.property_set.assert_called_once_with("python/SMOC", "tier", "carry-about")

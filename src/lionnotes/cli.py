@@ -540,9 +540,7 @@ def search(
             if archived:
                 filtered = []
                 for line in lines:
-                    segments = (
-                        line.strip().replace("\\", "/").split("/")
-                    )
+                    segments = line.strip().replace("\\", "/").split("/")
                     # Check if any segment matches an archived subject
                     if not any(seg in archived for seg in segments):
                         filtered.append(line)
@@ -559,9 +557,7 @@ def search(
                 normalized_subj = normalized
             filtered_lines = []
             for line in lines:
-                segments = (
-                    line.strip().replace("\\", "/").split("/")
-                )
+                segments = line.strip().replace("\\", "/").split("/")
                 if normalized_subj in segments:
                     filtered_lines.append(line)
             if not filtered_lines:
@@ -947,9 +943,7 @@ def cache_archive(
 
 @cache_app.command("promote")
 def cache_promote(
-    subject: str = typer.Argument(
-        ..., help="Subject to promote to carry-about."
-    ),
+    subject: str = typer.Argument(..., help="Subject to promote to carry-about."),
 ):
     """Promote a subject to the carry-about tier."""
     config = _resolve_config()
