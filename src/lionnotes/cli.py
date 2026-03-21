@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import typer
 
 from lionnotes import __version__
+from lionnotes.capture import capture_speed
 from lionnotes.config import (
     Config,
     ConfigNotFoundError,
@@ -19,6 +21,12 @@ from lionnotes.obsidian import (
     ObsidianCLIError,
     ObsidianNotFoundError,
     ObsidianNotRunningError,
+)
+from lionnotes.subjects import (
+    SubjectError,
+    create_subject,
+    list_subjects,
+    normalize_subject_name,
 )
 from lionnotes.templates import render
 
@@ -144,7 +152,7 @@ def init(
     if config_path.is_file():
         skipped.append(".lionnotes.toml")
     else:
-        config = Config(vault_path=str(vp))
+        config = Config(vault_path=str(vp), vault_name=vname)
         save_config(config, config_path)
         created.append(".lionnotes.toml")
 
@@ -304,3 +312,188 @@ def doctor(
         _warn("Maintenance checks", "skipped (no vault path)")
 
     typer.echo("\nDone.")
+
+
+# -- helpers for config/obsidian resolution ---------------------------------
+
+
+def _resolve_config(vault_path: str | None = None) -> Config:
+    """Find and load the LionNotes config."""
+    err_msg = "Error: No .lionnotes.toml found. Run 'lionnotes init' first."
+    if vault_path:
+        config_file = Path(vault_path).resolve() / ".lionnotes.toml"
+        if not config_file.is_file():
+            typer.echo(err_msg, err=True)
+            raise typer.Exit(1)
+        return load_config(config_file)
+    try:
+        return load_config(find_config())
+    except ConfigNotFoundError:
+        typer.echo(err_msg, err=True)
+        raise typer.Exit(1) from None
+
+
+def _resolve_obsidian(config: Config) -> ObsidianCLI:
+    """Create an ObsidianCLI instance from config.
+
+    Uses the persisted vault_name when available, falling back to
+    the directory name of vault_path.
+    """
+    name = config.vault_name or Path(config.vault_path).name
+    return ObsidianCLI(vault=name)
+
+
+# -- capture ----------------------------------------------------------------
+
+
+@app.command()
+def capture(
+    content: str | None = typer.Argument(None, help="The thought to capture."),
+    subject: str | None = typer.Option(
+        None, "--subject", "-s", help="Target subject (omit for pan-subject inbox)."
+    ),
+    hint: str | None = typer.Option(
+        None, "--hint", "-h", help="Context hint (1-3 words)."
+    ),
+    thought_type: str | None = typer.Option(
+        None, "--type", "-t", help="Thought type (observation, question, idea, etc.)."
+    ),
+):
+    """Capture a speed thought."""
+    # Read from stdin if no content argument
+    if content is None:
+        if sys.stdin.isatty():
+            typer.echo("Error: Provide content as an argument or via stdin.", err=True)
+            raise typer.Exit(1)
+        content = sys.stdin.read().strip()
+        if not content:
+            typer.echo("Error: No content provided.", err=True)
+            raise typer.Exit(1)
+
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        # Normalize subject for display (capture_speed also normalizes)
+        display_subject = (
+            normalize_subject_name(subject) if subject else None
+        )
+        entry = capture_speed(
+            content, obsidian, config,
+            subject=subject, hint=hint, thought_type=thought_type,
+        )
+        target = display_subject or "inbox"
+        typer.echo(f"Captured to {target}: {entry}")
+    except (SubjectError, ValueError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- subjects ---------------------------------------------------------------
+
+subjects_app = typer.Typer(
+    name="subjects", help="Manage subjects.", no_args_is_help=True,
+)
+app.add_typer(subjects_app)
+
+
+@subjects_app.command("list")
+def subjects_list():
+    """List all subjects in the vault."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    subjects = list_subjects(obsidian)
+    if not subjects:
+        typer.echo(
+            "No subjects found. Create one with"
+            " 'lionnotes subjects create NAME'."
+        )
+        return
+
+    typer.echo(f"Subjects ({len(subjects)}):")
+    for s in subjects:
+        typer.echo(f"  - {s}")
+
+
+@subjects_app.command("create")
+def subjects_create(
+    name: str = typer.Argument(..., help="Name for the new subject."),
+):
+    """Create a new subject with folder structure."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        normalized = create_subject(name, obsidian, config)
+        typer.echo(f"Created subject: {normalized}")
+        typer.echo(f"  + {normalized}/SMOC")
+        typer.echo(f"  + {normalized}/purpose")
+        typer.echo(f"  + {normalized}/speeds")
+        typer.echo(f"  + {normalized}/glossary")
+    except SubjectError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- search -----------------------------------------------------------------
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="Search query."),
+    subject: str | None = typer.Option(
+        None, "--subject", "-s", help="Scope search to a subject folder."
+    ),
+    context: bool = typer.Option(
+        False, "--context", help="Show surrounding content."
+    ),
+    speeds_only: bool = typer.Option(
+        False, "--speeds-only", help="Only search speed notes."
+    ),
+):
+    """Search the vault using Obsidian's index."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    # Build the search query
+    search_query = query
+    if speeds_only:
+        search_query = f"type: speeds {query}"
+
+    try:
+        if context:
+            results = obsidian.search_context(search_query)
+        else:
+            results = obsidian.search(search_query)
+
+        if not results or not results.strip():
+            typer.echo("No results found.")
+            return
+
+        # Filter by subject if specified (path-segment match)
+        if subject:
+            try:
+                normalized_subj = normalize_subject_name(subject)
+            except SubjectError:
+                # Fall back to basic normalization for search
+                normalized_subj = (
+                    subject.strip().lower().replace(" ", "-")
+                )
+            filtered_lines = []
+            for line in results.strip().splitlines():
+                # Split into path segments for exact folder matching
+                segments = line.strip().replace("\\", "/").split("/")
+                if normalized_subj in segments:
+                    filtered_lines.append(line)
+            if not filtered_lines:
+                typer.echo(
+                    f"No results found in subject '{subject}'."
+                )
+                return
+            typer.echo("\n".join(filtered_lines))
+        else:
+            typer.echo(results.strip())
+    except ObsidianCLIError as exc:
+        typer.echo(f"Search error: {exc}", err=True)
+        raise typer.Exit(1) from None

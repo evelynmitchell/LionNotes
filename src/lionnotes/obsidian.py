@@ -17,6 +17,15 @@ class ObsidianCLIError(Exception):
         msg = f"obsidian {' '.join(args)} failed (exit {returncode}): {stderr}"
         super().__init__(msg)
 
+    @property
+    def is_not_found(self) -> bool:
+        """Return True if the error indicates a missing file/note."""
+        lower = self.stderr.lower()
+        return any(
+            m in lower
+            for m in ("not found", "does not exist", "no such", "doesn't exist")
+        )
+
 
 class ObsidianNotRunningError(Exception):
     """Cannot connect to a running Obsidian instance."""
@@ -143,7 +152,21 @@ class ObsidianCLI:
 
     def search(self, query: str, limit: int = 20) -> str:
         """Search the vault."""
-        return self._run("search", f'query="{self._quote(query)}"', f"limit={limit}")
+        return self._run(
+            "search",
+            f'query="{self._quote(query)}"',
+            f"limit={limit}",
+        )
+
+    def search_context(
+        self, query: str, limit: int = 10,
+    ) -> str:
+        """Search the vault with surrounding context."""
+        return self._run(
+            "search:context",
+            f'query="{self._quote(query)}"',
+            f"limit={limit}",
+        )
 
     def backlinks(self, file: str) -> str:
         """Get backlinks for a note."""
