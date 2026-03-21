@@ -55,6 +55,7 @@ def mock_env(tmp_path):
         patch("lionnotes.subjects.save_config"),
         patch("lionnotes.maps._write_note"),
         patch("lionnotes.strategy._write_note"),
+        patch("lionnotes.index._write_note"),
     ):
         yield config, obs
 
@@ -371,3 +372,95 @@ class TestSearchTierFiltering:
         assert result.exit_code == 0
         assert "python" in result.output
         assert "old-stuff" in result.output
+
+
+# -- index command tests ----------------------------------------------------
+
+SAMPLE_SMOC_FOR_INDEX = """\
+---
+type: smoc
+subject: "python"
+version: 1
+created: "2026-01-01"
+updated: "2026-01-01"
+---
+# python — Subject Map of Contents
+
+## Purpose & Principles
+- [[purpose]]
+
+## Map
+
+### Core
+- [[POI-01-decorators]]
+
+### Peripheral
+
+### References
+
+## Speed Thoughts
+- Current speed page: [[speeds]]
+
+## See Also
+"""
+
+SAMPLE_POI_FOR_INDEX = """\
+---
+type: poi
+subject: "python"
+---
+# POI 1: Decorators
+
+## Content
+Decorators use #metaprogramming. See [[REF-01-pep-318]].
+"""
+
+SAMPLE_SPEEDS_FOR_INDEX = """\
+---
+type: speeds
+subject: "python"
+---
+# python — Speed Thoughts
+
+- S1: decorators are cool #thought/observation
+"""
+
+
+class TestIndexCommand:
+    def test_builds_index(self, mock_env):
+        config, obs = mock_env
+
+        def read_side_effect(path):
+            if path == "python/SMOC":
+                return SAMPLE_SMOC_FOR_INDEX
+            if path == "python/POI-01-decorators":
+                return SAMPLE_POI_FOR_INDEX
+            if path == "python/speeds":
+                return SAMPLE_SPEEDS_FOR_INDEX
+            if path == "python/Index":
+                raise ObsidianCLIError(["read"], 1, "not found")
+            raise ObsidianCLIError(["read"], 1, "not found")
+
+        obs.read.side_effect = read_side_effect
+
+        result = runner.invoke(app, ["index", "python"])
+
+        assert result.exit_code == 0
+        assert "Built index for python" in result.output
+        assert "python/Index" in result.output
+
+    def test_smoc_not_found(self, mock_env):
+        config, obs = mock_env
+        obs.read.side_effect = ObsidianCLIError(["read"], 1, "not found")
+
+        result = runner.invoke(app, ["index", "nonexistent"])
+
+        assert result.exit_code == 1
+        assert "Cannot read SMOC" in result.output
+
+    def test_invalid_subject_name(self, mock_env):
+        config, obs = mock_env
+
+        result = runner.invoke(app, ["index", "!!!"])
+
+        assert result.exit_code == 1

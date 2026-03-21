@@ -208,6 +208,16 @@ updated: "{{date}}"
 
 <!-- Abbreviations and shorthands used across all subjects. -->
 """,
+    "index": """\
+---
+type: index
+subject: "{{subject}}"
+updated: "{{date}}"
+---
+# {{subject}} — Index
+
+## Keywords
+""",
 }
 
 # Which variables are required for each template (others are optional)
@@ -225,6 +235,7 @@ REQUIRED_VARS: dict[str, set[str]] = {
     "maintenance-queue": set(),
     "subject-registry": set(),
     "global-aliases": set(),
+    "index": {"subject"},
 }
 
 # Pattern that matches only known variable placeholders
