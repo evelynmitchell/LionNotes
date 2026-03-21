@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import re
+import time
 from datetime import date
 
 from lionnotes.obsidian import ObsidianCLI, ObsidianCLIError
@@ -108,6 +109,17 @@ def _extract_link(line: str) -> str:
     return m.group(1) if m else ""
 
 
+def _has_wikilink(content: str, link: str) -> bool:
+    """Check if content contains a wikilink to the given target.
+
+    Matches both ``[[link]]`` and ``[[link|alias]]`` forms exactly,
+    avoiding substring false positives.
+    """
+    # Escape for regex, then match [[link]] or [[link|...]]
+    escaped = re.escape(link)
+    return bool(re.search(rf"\[\[{escaped}(?:\|[^\]]+)?\]\]", content))
+
+
 def _parse_section_entries(
     lines: list[str],
     entry_cls: type = SmocEntry,
@@ -191,7 +203,7 @@ def update_smoc(
 
     # Extract the link from the entry to check idempotency
     link = _extract_link(poi_entry)
-    if link and f"[[{link}]]" in content:
+    if link and _has_wikilink(content, link):
         return  # already present
 
     lines = content.splitlines()
@@ -256,7 +268,8 @@ def _write_note(path: str, content: str, obsidian: ObsidianCLI) -> None:
     # Strategy: use property_set for simple changes, but for full rewrites
     # we need to use append on an empty note. Since the CLI doesn't support
     # full overwrite, we'll use rename + create.
-    backup_name = f"{path}__lionnotes_tmp"
+    ts = int(time.time() * 1000)
+    backup_name = f"{path}__lionnotes_bak_{ts}"
     with contextlib.suppress(ObsidianCLIError):
         obsidian.rename(path, backup_name)
 
@@ -309,7 +322,7 @@ def update_gsmoc(subject_entry: str, obsidian: ObsidianCLI) -> None:
     content = obsidian.read("GSMOC")
 
     link = _extract_link(subject_entry)
-    if link and f"[[{link}" in content:
+    if link and _has_wikilink(content, link):
         return  # already present
 
     lines = content.splitlines()

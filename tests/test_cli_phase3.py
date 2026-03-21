@@ -161,6 +161,18 @@ class TestPoiCommand:
         assert result.exit_code == 1
         assert "reserved" in result.output
 
+    def test_poi_slugifies_dangerous_title(self, mock_env):
+        """Titles with path separators or special chars are sanitized."""
+        config, obs = mock_env
+        obs.read.return_value = SAMPLE_SMOC
+
+        result = runner.invoke(app, ["poi", "python", "../../etc/passwd"])
+
+        assert result.exit_code == 0
+        # Should not contain path separators
+        assert "/../" not in result.output
+        assert "POI-01-etc-passwd" in result.output
+
 
 # -- ref command tests -------------------------------------------------------
 
@@ -190,6 +202,23 @@ class TestRefCommand:
 
         assert result.exit_code == 0
         assert "REF-01" in result.output
+
+    def test_ref_with_notes(self, mock_env):
+        """--notes should be incorporated into the created note."""
+        config, obs = mock_env
+        obs.read.return_value = SAMPLE_SMOC
+
+        result = runner.invoke(
+            app,
+            ["ref", "python", "Docs", "--notes", "Very useful reference"],
+        )
+
+        assert result.exit_code == 0
+        created_content = obs.create.call_args.kwargs.get(
+            "content",
+            obs.create.call_args.args[1] if len(obs.create.call_args.args) > 1 else "",
+        )
+        assert "Very useful reference" in created_content
 
 
 # -- map command tests -------------------------------------------------------

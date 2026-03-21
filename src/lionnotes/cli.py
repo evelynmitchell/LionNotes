@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import re
 import sys
 from pathlib import Path
 
@@ -516,6 +517,23 @@ def search(
 # -- poi --------------------------------------------------------------------
 
 
+def _slugify(text: str) -> str:
+    """Sanitize text for use in filenames — only [a-z0-9-] allowed."""
+    slug = text.strip().lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    slug = slug.strip("-")
+    # Collapse multiple dashes
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug or "untitled"
+
+
+def _escape_yaml(value: str) -> str:
+    """Escape a string for safe embedding in YAML frontmatter."""
+    # Replace characters that could break YAML double-quoted strings
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
 def _max_entry_number(smoc, prefix: str) -> int:
     """Extract the max number from SMOC entries matching prefix."""
     max_num = 0
@@ -552,15 +570,14 @@ def poi(
         poi_num = _next_poi_number(normalized, obsidian)
         poi_num_str = f"{poi_num:02d}"
 
-        # Sanitize title for filename
-        safe_title = title.strip().lower().replace(" ", "-")
+        safe_title = _slugify(title)
 
         note_name = f"{normalized}/POI-{poi_num_str}-{safe_title}"
         content = render(
             "poi",
             subject=normalized,
             poi_number=poi_num,
-            title=title,
+            title=_escape_yaml(title),
         )
         obsidian.create(note_name, content=content)
 
@@ -600,18 +617,23 @@ def ref(
         ref_num = _next_ref_number(normalized, obsidian)
         ref_num_str = f"{ref_num:02d}"
 
-        safe_title = title.strip().lower().replace(" ", "-")
+        safe_title = _slugify(title)
 
         note_name = f"{normalized}/REF-{ref_num_str}-{safe_title}"
         content = render(
             "reference",
             subject=normalized,
             ref_number=ref_num,
-            title=title,
-            author=author or "Unknown",
-            year=year or "n.d.",
-            url=url,
+            title=_escape_yaml(title),
+            author=_escape_yaml(author or "Unknown"),
+            year=_escape_yaml(year or "n.d."),
+            url=_escape_yaml(url),
         )
+        if notes:
+            content = content.replace(
+                "<!-- Annotations and key takeaways -->",
+                notes,
+            )
         obsidian.create(note_name, content=content)
 
         # Auto-link from SMOC References section

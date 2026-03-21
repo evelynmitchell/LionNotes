@@ -116,9 +116,6 @@ def get_unmapped_speeds(
     return entries
 
 
-_MAPPED_SUFFIX_RE = re.compile(r"\[→\s*POI-\d+\]")
-
-
 def map_speed(
     subject: str,
     speed_num: int,
@@ -136,8 +133,23 @@ def map_speed(
     Raises:
         ReviewError: If speed entry not found or already mapped.
     """
-    # Normalize poi_ref
-    if poi_ref.isdigit() or not poi_ref.startswith("POI-"):
+    # Normalize poi_ref to canonical POI-N format
+    poi_ref = poi_ref.strip().upper()
+    if poi_ref.isdigit():
+        poi_ref = f"POI-{poi_ref}"
+    elif poi_ref.startswith("POI-"):
+        # Already prefixed — extract and validate the number portion
+        num_part = poi_ref[4:]
+        if not num_part.isdigit():
+            raise ReviewError(
+                f"Invalid POI reference: {poi_ref!r}. Expected POI-N or a number.",
+            )
+    else:
+        # Try to interpret as a bare number
+        if not poi_ref.isdigit():
+            raise ReviewError(
+                f"Invalid POI reference: {poi_ref!r}. Expected POI-N or a number.",
+            )
         poi_ref = f"POI-{poi_ref}"
 
     content = obsidian.read(f"{subject}/speeds")
@@ -200,6 +212,9 @@ def assign_inbox_entry(
     """
     from lionnotes.capture import _format_speed_entry
     from lionnotes.maps import _write_note
+    from lionnotes.subjects import normalize_subject_name
+
+    target_subject = normalize_subject_name(target_subject)
 
     # Read and remove from inbox
     inbox_content = obsidian.read("_inbox/unsorted")

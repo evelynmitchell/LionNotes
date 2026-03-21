@@ -159,6 +159,26 @@ class TestMapSpeed:
         with pytest.raises(ReviewError, match="not found"):
             map_speed("python", 99, "POI-1", obs)
 
+    def test_normalizes_lowercase_poi_ref(self):
+        """poi-5 should become POI-5, not POI-poi-5."""
+        obs = MagicMock()
+        obs.read.return_value = SAMPLE_SPEEDS
+
+        map_speed("python", 2, "poi-5", obs)
+
+        created_content = obs.create.call_args.kwargs.get(
+            "content",
+            obs.create.call_args.args[1] if len(obs.create.call_args.args) > 1 else "",
+        )
+        assert "[→ POI-5]" in created_content
+
+    def test_invalid_poi_ref_raises(self):
+        obs = MagicMock()
+        obs.read.return_value = SAMPLE_SPEEDS
+
+        with pytest.raises(ReviewError, match="Invalid POI reference"):
+            map_speed("python", 1, "abc", obs)
+
 
 # -- triage_inbox tests ------------------------------------------------------
 
