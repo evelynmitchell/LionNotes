@@ -100,6 +100,9 @@ def complete_priority(
     content = obsidian.read(STRATEGY_NOTE)
     items = _parse_priorities(content)
 
+    if not items:
+        raise StrategyError("No active priorities to complete.")
+
     if item_number < 1 or item_number > len(items):
         raise StrategyError(
             f"Invalid item number {item_number}. "

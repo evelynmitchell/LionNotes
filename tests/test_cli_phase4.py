@@ -137,6 +137,16 @@ class TestStrategyDone:
         assert result.exit_code == 1
         assert "Invalid item number" in result.output
 
+    def test_done_empty_list(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = EMPTY_STRATEGY
+
+        result = runner.invoke(app, ["strategy", "done", "1"])
+
+        assert result.exit_code == 1
+        assert "No active priorities" in result.output
+
     def test_no_args_shows_help(self):
         result = runner.invoke(app, ["strategy"])
-        assert result.exit_code == 0 or "Usage" in result.output
+        assert result.exit_code == 2
+        assert "Usage" in result.output

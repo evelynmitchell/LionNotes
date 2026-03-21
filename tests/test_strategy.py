@@ -197,6 +197,15 @@ class TestCompletePriority:
         with pytest.raises(StrategyError, match="Invalid item number -1"):
             complete_priority(-1, obs)
 
+    def test_empty_list_raises(self):
+        obs = MagicMock()
+        obs.read.return_value = EMPTY_STRATEGY
+
+        with pytest.raises(
+            StrategyError, match="No active priorities to complete"
+        ):
+            complete_priority(1, obs)
+
     def test_writes_to_correct_note(self):
         obs = MagicMock()
         obs.read.return_value = SAMPLE_STRATEGY
