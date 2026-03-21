@@ -176,7 +176,10 @@ class TestSearchCommand:
         )
         assert result.exit_code == 0
         obs.search_context.assert_called_once()
-        obs.search.assert_not_called()
+        # search may be called internally by list_tiers for archive
+        # filtering, but search_context must be used for the user query
+        for call in obs.search.call_args_list:
+            assert "thought" not in call[0][0]
 
     def test_search_error(self, mock_env):
         config, obs = mock_env

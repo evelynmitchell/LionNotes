@@ -10,6 +10,14 @@ from pathlib import Path
 import typer
 
 from lionnotes import __version__
+from lionnotes.cache import (
+    CacheError,
+    activate_subject,
+    archive_subject,
+    get_tier,
+    list_tiers,
+    set_tier,
+)
 from lionnotes.capture import capture_speed
 from lionnotes.config import (
     Config,
@@ -422,7 +430,14 @@ app.add_typer(subjects_app)
 
 
 @subjects_app.command("list")
-def subjects_list():
+def subjects_list(
+    all_subjects: bool = typer.Option(
+        False,
+        "--all",
+        "-a",
+        help="Include archived subjects.",
+    ),
+):
     """List all subjects in the vault."""
     config = _resolve_config()
     obsidian = _resolve_obsidian(config)
@@ -434,9 +449,25 @@ def subjects_list():
         )
         return
 
+    # Build tier lookup once to avoid redundant subprocess calls
+    tier_map = {s: get_tier(s, obsidian) for s in subjects}
+
+    # Filter out archived subjects unless --all is passed
+    if not all_subjects:
+        subjects = [s for s in subjects if tier_map[s] != "archive"]
+        if not subjects:
+            typer.echo("No active subjects. Use --all to include archived.")
+            return
+
     typer.echo(f"Subjects ({len(subjects)}):")
     for s in subjects:
-        typer.echo(f"  - {s}")
+        tier = tier_map[s]
+        if tier == "common-store":
+            typer.echo(f"  - {s} [common]")
+        elif tier == "archive":
+            typer.echo(f"  - {s} [archived]")
+        else:
+            typer.echo(f"  - {s}")
 
 
 @subjects_app.command("create")
@@ -472,6 +503,11 @@ def search(
     speeds_only: bool = typer.Option(
         False, "--speeds-only", help="Only search speed notes."
     ),
+    include_archived: bool = typer.Option(
+        False,
+        "--include-archived",
+        help="Include results from archived subjects.",
+    ),
 ):
     """Search the vault using Obsidian's index."""
     config = _resolve_config()
@@ -492,20 +528,44 @@ def search(
             typer.echo("No results found.")
             return
 
+        lines = results.strip().splitlines()
+
+        # Filter out archived subjects unless --include-archived
+        if not include_archived:
+            if subject:
+                # Subject-scoped: only check that one subject's tier
+                try:
+                    subj_name = normalize_subject_name(subject)
+                except SubjectError:
+                    subj_name = subject.strip().lower().replace(" ", "-")
+                if get_tier(subj_name, obsidian) == "archive":
+                    typer.echo(
+                        f"Subject '{subject}' is archived."
+                        " Use --include-archived to search it."
+                    )
+                    return
+            else:
+                tiers = list_tiers(obsidian)
+                archived = set(tiers.get("archive", []))
+                if archived:
+                    filtered = []
+                    for line in lines:
+                        segments = line.strip().replace("\\", "/").split("/")
+                        if not any(seg in archived for seg in segments):
+                            filtered.append(line)
+                    lines = filtered
+
         # Filter by subject if specified (path-segment match)
         if subject:
             try:
                 normalized_subj = normalize_subject_name(subject)
             except SubjectError:
-                # Fall back to basic normalization for search
-                # (e.g. user searching within _inbox or other reserved names)
                 normalized = subject.strip().lower().replace(" ", "-")
                 while "--" in normalized:
                     normalized = normalized.replace("--", "-")
                 normalized_subj = normalized
             filtered_lines = []
-            for line in results.strip().splitlines():
-                # Split into path segments for exact folder matching
+            for line in lines:
                 segments = line.strip().replace("\\", "/").split("/")
                 if normalized_subj in segments:
                     filtered_lines.append(line)
@@ -514,7 +574,10 @@ def search(
                 return
             typer.echo("\n".join(filtered_lines))
         else:
-            typer.echo(results.strip())
+            if not lines:
+                typer.echo("No results found.")
+                return
+            typer.echo("\n".join(lines))
     except ObsidianCLIError as exc:
         typer.echo(f"Search error: {exc}", err=True)
         raise typer.Exit(1) from None
@@ -835,5 +898,90 @@ def strategy_done(
             f"[{removed.subject}] {removed.description}"
         )
     except (StrategyError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- cache ------------------------------------------------------------------
+
+cache_app = typer.Typer(
+    name="cache",
+    help="Manage subject tiers (carry-about / common-store / archive).",
+    no_args_is_help=True,
+)
+app.add_typer(cache_app)
+
+
+@cache_app.command("status")
+def cache_status():
+    """Show subjects grouped by tier."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        tiers = list_tiers(obsidian)
+        for tier_name in ("carry-about", "common-store", "archive"):
+            subjects = tiers[tier_name]
+            typer.echo(f"{tier_name} ({len(subjects)}):")
+            if subjects:
+                for s in subjects:
+                    typer.echo(f"  - {s}")
+            else:
+                typer.echo("  (none)")
+    except ObsidianCLIError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+@cache_app.command("archive")
+def cache_archive(
+    subject: str = typer.Argument(..., help="Subject to archive."),
+):
+    """Move a subject to the archive tier."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        archive_subject(subject, obsidian)
+        normalized = normalize_subject_name(subject)
+        typer.echo(f"Archived: {normalized}")
+    except (CacheError, SubjectError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+@cache_app.command("promote")
+def cache_promote(
+    subject: str = typer.Argument(..., help="Subject to promote to carry-about."),
+):
+    """Promote a subject to the carry-about tier."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        activate_subject(subject, obsidian)
+        normalized = normalize_subject_name(subject)
+        typer.echo(f"Promoted: {normalized}")
+    except (CacheError, SubjectError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+@cache_app.command("set")
+def cache_set(
+    subject: str = typer.Argument(..., help="Subject name."),
+    tier: str = typer.Argument(
+        ..., help="Tier: carry-about, common-store, or archive."
+    ),
+):
+    """Set a subject's tier directly."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        set_tier(subject, tier, obsidian)
+        normalized = normalize_subject_name(subject)
+        typer.echo(f"Set {normalized} to {tier}")
+    except (CacheError, SubjectError, ObsidianCLIError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
