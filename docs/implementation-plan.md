@@ -19,7 +19,7 @@ the book describes, modernized for digital use.
 |---|---|---|
 | **Speed Thoughts** (pan-subject & subject) | Quick-capture notes with subject/hint/content fields | `lionnotes capture` |
 | **Subject Map of Contents (SMOC)** | Auto-generated MOC notes per subject with wikilinks | `lionnotes map` |
-| **Grand Subject MOC (GSMOC)** | Root MOC note linking all subjects, auto-maintained | `lionnotes gsmoc` |
+| **Grand Subject MOC (GSMOC)** | Root MOC note linking all subjects, auto-maintained | `lionnotes map` (no args) |
 | **Points of Interest (POI)** | Long-form notes within a subject, numbered & titled | `lionnotes poi` |
 | **Purpose & Principles (P&P)** | Frontmatter `includes`/`excludes` + boundary note per subject | `lionnotes pp` |
 | **Subject Registry (GSR)** | Structured index of all subjects with metadata | `lionnotes subjects` |
@@ -30,7 +30,7 @@ the book describes, modernized for digital use.
 | **4-Color System** | Obsidian callouts: `[!note]` blue, `[!tip]` green, `[!warning]` red, `[!abstract]` structural | `lionnotes color` |
 | **Abbreviations/Shorthand (A/S)** | Per-subject and global alias definitions in frontmatter | `lionnotes alias` |
 | **Out Cards** | Redirect notes that point to where content moved | automatic on move |
-| **Transcription checkoff** | Frontmatter `mapped: true/false` on speed notes | `lionnotes review` |
+| **Transcription checkoff** | Inline `[→ POI-N]` suffix on mapped speed entries | `lionnotes review` |
 | **References (REF)** | Reference notes with structured citation metadata | `lionnotes ref` |
 | **Index** | Late-bound keyword→note index, built on demand | `lionnotes index` |
 | **Strategy (stickies)** | Frontmatter `priority` field + `#strategy` tag on active items | `lionnotes strategy` |
