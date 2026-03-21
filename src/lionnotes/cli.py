@@ -1072,7 +1072,7 @@ def alias_set(
         normalized = normalize_subject_name(subject) if subject else None
         set_alias(abbr, expansion, obsidian, subject=normalized)
         scope = normalized or "global"
-        typer.echo(f"Set alias ({scope}): {abbr} -> {expansion}")
+        typer.echo(f"Set alias ({scope}): {abbr.strip()} -> {expansion.strip()}")
     except (AliasError, SubjectError, ObsidianCLIError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
@@ -1096,7 +1096,7 @@ def alias_remove(
         normalized = normalize_subject_name(subject) if subject else None
         remove_alias(abbr, obsidian, subject=normalized)
         scope = normalized or "global"
-        typer.echo(f"Removed alias ({scope}): {abbr}")
+        typer.echo(f"Removed alias ({scope}): {abbr.strip()}")
     except (AliasError, SubjectError, ObsidianCLIError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
