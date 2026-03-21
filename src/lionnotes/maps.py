@@ -186,7 +186,7 @@ def read_smoc(subject: str, obsidian: ObsidianCLI) -> Smoc:
 
 def update_smoc(
     subject: str,
-    poi_entry: str,
+    entry_line: str,
     obsidian: ObsidianCLI,
     *,
     section: str = "core",
@@ -195,14 +195,14 @@ def update_smoc(
 
     Args:
         subject: Subject name.
-        poi_entry: Wikilink entry line, e.g. ``- [[POI-01-my-title]]``.
+        entry_line: Wikilink entry line, e.g. ``- [[POI-01-my-title]]``.
         obsidian: ObsidianCLI instance.
         section: Which section to add to ("core", "peripheral", "references").
     """
     content = obsidian.read(f"{subject}/SMOC")
 
     # Extract the link from the entry to check idempotency
-    link = _extract_link(poi_entry)
+    link = _extract_link(entry_line)
     if link and _has_wikilink(content, link):
         return  # already present
 
@@ -232,18 +232,15 @@ def update_smoc(
         # Section not found — append to end of file
         lines.append("")
         lines.append(f"### {section.title()}")
-        lines.append(poi_entry)
+        lines.append(entry_line)
     else:
-        lines.insert(insert_idx, poi_entry)
+        lines.insert(insert_idx, entry_line)
 
     # Update the 'updated' date in frontmatter
     new_content = "\n".join(lines)
     new_content = _update_frontmatter_date(new_content)
 
-    # Write back by creating with overwrite semantics
-    # Since obsidian CLI doesn't have a "write" command, we read+create
-    # Actually, we need to use a different approach — let's use the full
-    # content replacement pattern
+    # Write back using full-content replacement via _write_note
     _write_note(f"{subject}/SMOC", new_content, obsidian)
 
 
@@ -281,16 +278,17 @@ def _write_note(path: str, content: str, obsidian: ObsidianCLI) -> None:
             obsidian.rename(backup_name, path)
         raise
 
-    # Archive backup alongside the note: per-subject for subject notes,
-    # root _archive/ for top-level notes.
+    # Clean up backup: archive into per-subject _archive/ for subject notes,
+    # or delete for top-level notes (no root _archive/ in vault layout).
     parts = path.split("/")
     if len(parts) >= 2:
-        # e.g. "subject/SMOC" -> "subject/_archive/SMOC__lionnotes_bak_..."
         archive_dest = f"{parts[0]}/_archive/{'/'.join(parts[1:])}__lionnotes_bak_{ts}"
+        with contextlib.suppress(ObsidianCLIError):
+            obsidian.rename(backup_name, archive_dest)
     else:
-        archive_dest = f"_archive/{backup_name}"
-    with contextlib.suppress(ObsidianCLIError):
-        obsidian.rename(backup_name, archive_dest)
+        # Top-level note — just delete the backup
+        with contextlib.suppress(ObsidianCLIError):
+            obsidian.delete(backup_name)
 
 
 # -- GSMOC operations -------------------------------------------------------

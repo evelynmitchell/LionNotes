@@ -148,6 +148,10 @@ class ObsidianCLI:
             f'new_name="{self._quote(new_name)}"',
         )
 
+    def delete(self, file: str) -> None:
+        """Delete a note (moves to Obsidian trash)."""
+        self._run("delete", f'file="{self._quote(file)}"')
+
     # -- search & discovery -------------------------------------------------
 
     def search(self, query: str, limit: int = 20) -> str:
