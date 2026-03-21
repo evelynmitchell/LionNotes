@@ -109,9 +109,7 @@ class TestStrategyAdd:
         config, obs = mock_env
         obs.read.return_value = EMPTY_STRATEGY
 
-        result = runner.invoke(
-            app, ["strategy", "add", "rust", "Read the Rust book"]
-        )
+        result = runner.invoke(app, ["strategy", "add", "rust", "Read the Rust book"])
 
         assert result.exit_code == 0
         assert "Added priority #1" in result.output

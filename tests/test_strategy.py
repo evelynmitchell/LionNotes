@@ -201,9 +201,7 @@ class TestCompletePriority:
         obs = MagicMock()
         obs.read.return_value = EMPTY_STRATEGY
 
-        with pytest.raises(
-            StrategyError, match="No active priorities to complete"
-        ):
+        with pytest.raises(StrategyError, match="No active priorities to complete"):
             complete_priority(1, obs)
 
     def test_writes_to_correct_note(self):

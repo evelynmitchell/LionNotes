@@ -105,8 +105,7 @@ def complete_priority(
 
     if item_number < 1 or item_number > len(items):
         raise StrategyError(
-            f"Invalid item number {item_number}. "
-            f"Valid range: 1–{len(items)}."
+            f"Invalid item number {item_number}. Valid range: 1–{len(items)}."
         )
 
     removed = items[item_number - 1]
