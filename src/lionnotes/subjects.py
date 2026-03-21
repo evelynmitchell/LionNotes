@@ -58,9 +58,7 @@ def normalize_subject_name(name: str) -> str:
     return normalized
 
 
-def create_subject(
-    name: str, obsidian: ObsidianCLI, config: Config
-) -> str:
+def create_subject(name: str, obsidian: ObsidianCLI, config: Config) -> str:
     """Create a new subject with its folder structure.
 
     Creates: SMOC, purpose, speeds, glossary stubs.
@@ -96,7 +94,9 @@ def create_subject(
 
 
 def list_subjects(
-    obsidian: ObsidianCLI, *, limit: int = 200,
+    obsidian: ObsidianCLI,
+    *,
+    limit: int = 200,
 ) -> list[str]:
     """List all subjects in the vault by searching for SMOC notes.
 

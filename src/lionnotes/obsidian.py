@@ -159,7 +159,9 @@ class ObsidianCLI:
         )
 
     def search_context(
-        self, query: str, limit: int = 10,
+        self,
+        query: str,
+        limit: int = 10,
     ) -> str:
         """Search the vault with surrounding context."""
         return self._run(

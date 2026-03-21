@@ -117,11 +117,7 @@ class TestCreateSubject:
 class TestListSubjects:
     def test_returns_subjects(self):
         obs = MagicMock()
-        obs.search.return_value = (
-            "alpha/SMOC.md\n"
-            "beta/SMOC.md\n"
-            "gamma/SMOC.md\n"
-        )
+        obs.search.return_value = "alpha/SMOC.md\nbeta/SMOC.md\ngamma/SMOC.md\n"
 
         result = list_subjects(obs)
         assert result == ["alpha", "beta", "gamma"]
@@ -136,7 +132,9 @@ class TestListSubjects:
     def test_reraises_non_not_found_errors(self):
         obs = MagicMock()
         obs.search.side_effect = ObsidianCLIError(
-            ["search"], -1, "Command timed out",
+            ["search"],
+            -1,
+            "Command timed out",
         )
 
         with pytest.raises(ObsidianCLIError, match="timed out"):
@@ -144,20 +142,14 @@ class TestListSubjects:
 
     def test_filters_internal_folders(self):
         obs = MagicMock()
-        obs.search.return_value = (
-            "alpha/SMOC.md\n"
-            "_inbox/SMOC.md\n"
-        )
+        obs.search.return_value = "alpha/SMOC.md\n_inbox/SMOC.md\n"
 
         result = list_subjects(obs)
         assert result == ["alpha"]
 
     def test_deduplicates(self):
         obs = MagicMock()
-        obs.search.return_value = (
-            "alpha/SMOC.md\n"
-            "alpha/SMOC.md\n"
-        )
+        obs.search.return_value = "alpha/SMOC.md\nalpha/SMOC.md\n"
 
         result = list_subjects(obs)
         assert result == ["alpha"]
