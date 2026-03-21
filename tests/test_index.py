@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lionnotes.index import (
-    IndexError,
+    IndexBuildError,
     _extract_keywords,
     _format_index,
     _strip_frontmatter,
@@ -89,7 +89,7 @@ updated: "2026-01-01"
 class TestStripFrontmatter:
     def test_strips_frontmatter(self):
         content = "---\nfoo: bar\n---\nBody text"
-        assert _strip_frontmatter(content) == "\nBody text"
+        assert _strip_frontmatter(content) == "Body text"
 
     def test_no_frontmatter(self):
         content = "Just body text"
@@ -99,9 +99,13 @@ class TestStripFrontmatter:
         content = "---\nfoo: bar\nBody text"
         assert _strip_frontmatter(content) == content
 
+    def test_dash_in_yaml_value(self):
+        content = '---\ntitle: "a---b"\n---\nBody'
+        assert _strip_frontmatter(content) == "Body"
+
     def test_empty_frontmatter(self):
         content = "---\n---\nBody"
-        assert _strip_frontmatter(content) == "\nBody"
+        assert _strip_frontmatter(content) == "Body"
 
 
 class TestExtractKeywords:
@@ -240,7 +244,7 @@ class TestBuildIndex:
         obs = MagicMock()
         obs.read.side_effect = ObsidianCLIError(["read"], 1, "not found")
 
-        with pytest.raises(IndexError, match="Cannot read SMOC"):
+        with pytest.raises(IndexBuildError, match="Cannot read SMOC"):
             build_index("nonexistent", obs)
 
     def test_skips_unreadable_notes(self):
@@ -260,6 +264,22 @@ class TestBuildIndex:
 
         # Should still produce an index, just with no keywords
         assert "# python — Index" in content
+
+    def test_reraises_non_not_found_errors(self):
+        obs = MagicMock()
+
+        def read_side_effect(path):
+            if path == "python/SMOC":
+                return SAMPLE_SMOC_CONTENT
+            if path == "python/Index":
+                raise ObsidianCLIError(["read"], 1, "not found")
+            # Simulate a permission error (not a not-found)
+            raise ObsidianCLIError(["read"], 1, "permission denied")
+
+        obs.read.side_effect = read_side_effect
+
+        with pytest.raises(ObsidianCLIError, match="permission denied"):
+            build_index("python", obs)
 
     def test_includes_speeds_page(self):
         obs = MagicMock()

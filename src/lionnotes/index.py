@@ -10,7 +10,7 @@ from lionnotes.obsidian import ObsidianCLI, ObsidianCLIError
 from lionnotes.templates import render
 
 
-class IndexError(Exception):
+class IndexBuildError(Exception):
     """Raised for index-related errors."""
 
 
@@ -43,13 +43,14 @@ def _extract_keywords(content: str) -> set[str]:
 
 
 def _strip_frontmatter(content: str) -> str:
-    """Remove YAML frontmatter delimited by ``---``."""
-    if not content.startswith("---"):
+    """Remove YAML frontmatter delimited by ``---`` on its own line."""
+    lines = content.splitlines(keepends=True)
+    if not lines or lines[0].rstrip("\n\r") != "---":
         return content
-    end = content.find("---", 3)
-    if end == -1:
-        return content
-    return content[end + 3 :]
+    for i in range(1, len(lines)):
+        if lines[i].rstrip("\n\r") == "---":
+            return "".join(lines[i + 1 :])
+    return content
 
 
 # -- Index formatting --------------------------------------------------------
@@ -81,24 +82,28 @@ def _format_index(
 
 
 def build_index(subject: str, obsidian: ObsidianCLI) -> str:
-    """Scan all notes in a subject, extract keywords, and create/update
-    the ``{subject}/Index`` note.
+    """Scan SMOC-linked notes in a subject, extract keywords, and
+    create/update the ``{subject}/Index`` note.
 
     Returns the generated index content.
 
     Raises:
-        IndexError: If the subject SMOC cannot be read.
+        IndexBuildError: If the subject SMOC cannot be read.
     """
     try:
         smoc = read_smoc(subject, obsidian)
     except ObsidianCLIError as exc:
-        raise IndexError(f"Cannot read SMOC for '{subject}': {exc}") from exc
+        raise IndexBuildError(f"Cannot read SMOC for '{subject}': {exc}") from exc
 
-    # Gather all linked notes from the SMOC
-    note_names = [e.link for e in smoc.all_entries if e.link]
-
-    # Also include the speeds page
-    note_names.append("speeds")
+    # Gather all linked notes from the SMOC, de-duplicated
+    seen: set[str] = set()
+    note_names: list[str] = []
+    for entry in smoc.all_entries:
+        if entry.link and entry.link not in seen:
+            seen.add(entry.link)
+            note_names.append(entry.link)
+    if "speeds" not in seen:
+        note_names.append("speeds")
 
     # Build keyword → [note_name, ...] mapping
     keyword_map: dict[str, list[str]] = {}
@@ -107,8 +112,10 @@ def build_index(subject: str, obsidian: ObsidianCLI) -> str:
         full_path = f"{subject}/{note_name}"
         try:
             content = obsidian.read(full_path)
-        except ObsidianCLIError:
-            continue  # skip unreadable notes
+        except ObsidianCLIError as exc:
+            if exc.is_not_found:
+                continue  # skip missing notes
+            raise
 
         keywords = _extract_keywords(content)
         for kw in keywords:
@@ -127,8 +134,11 @@ def build_index(subject: str, obsidian: ObsidianCLI) -> str:
         obsidian.read(index_path)
         # Exists — use rename-aside-then-create pattern
         _write_note(index_path, index_content, obsidian)
-    except ObsidianCLIError:
-        # Doesn't exist — create fresh
-        obsidian.create(index_path, content=index_content)
+    except ObsidianCLIError as exc:
+        if exc.is_not_found:
+            # Doesn't exist — create fresh
+            obsidian.create(index_path, content=index_content)
+        else:
+            raise
 
     return index_content

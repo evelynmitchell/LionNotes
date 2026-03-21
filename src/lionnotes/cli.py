@@ -26,7 +26,7 @@ from lionnotes.config import (
     load_config,
     save_config,
 )
-from lionnotes.index import IndexError, build_index
+from lionnotes.index import IndexBuildError, build_index
 from lionnotes.maps import (
     MapError,
     read_gsmoc,
@@ -1004,6 +1004,6 @@ def index_cmd(
         build_index(normalized, obsidian)
         typer.echo(f"Built index for {normalized}")
         typer.echo(f"  + {normalized}/Index")
-    except (IndexError, SubjectError, ObsidianCLIError) as exc:
+    except (IndexBuildError, SubjectError, ObsidianCLIError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
