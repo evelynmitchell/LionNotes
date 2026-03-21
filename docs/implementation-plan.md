@@ -19,9 +19,9 @@ the book describes, modernized for digital use.
 |---|---|---|
 | **Speed Thoughts** (pan-subject & subject) | Quick-capture notes with subject/hint/content fields | `lionnotes capture` |
 | **Subject Map of Contents (SMOC)** | Auto-generated MOC notes per subject with wikilinks | `lionnotes map` |
-| **Grand Subject MOC (GSMOC)** | Root MOC note linking all subjects, auto-maintained | `lionnotes gsmoc` |
+| **Grand Subject MOC (GSMOC)** | Root MOC note linking all subjects, auto-maintained | `lionnotes map` (no args) |
 | **Points of Interest (POI)** | Long-form notes within a subject, numbered & titled | `lionnotes poi` |
-| **Purpose & Principles (P&P)** | Frontmatter `includes`/`excludes` + boundary note per subject | `lionnotes pp` |
+| **Purpose & Principles (P&P)** | Frontmatter `includes`/`excludes` + boundary note per subject | `lionnotes subjects pp` |
 | **Subject Registry (GSR)** | Structured index of all subjects with metadata | `lionnotes subjects` |
 | **Caches / Binders** | Vault folders: carry-about, common-store, archive | `lionnotes cache` |
 | **Speed→Map→POI flow** | Review workflow: triage speeds, place on maps, expand to POIs | `lionnotes review` |
@@ -30,7 +30,7 @@ the book describes, modernized for digital use.
 | **4-Color System** | Obsidian callouts: `[!note]` blue, `[!tip]` green, `[!warning]` red, `[!abstract]` structural | `lionnotes color` |
 | **Abbreviations/Shorthand (A/S)** | Per-subject and global alias definitions in frontmatter | `lionnotes alias` |
 | **Out Cards** | Redirect notes that point to where content moved | automatic on move |
-| **Transcription checkoff** | Frontmatter `mapped: true/false` on speed notes | `lionnotes review` |
+| **Transcription checkoff** | Inline `[→ POI-N]` suffix on mapped speed entries | `lionnotes review` |
 | **References (REF)** | Reference notes with structured citation metadata | `lionnotes ref` |
 | **Index** | Late-bound keyword→note index, built on demand | `lionnotes index` |
 | **Strategy (stickies)** | Frontmatter `priority` field + `#strategy` tag on active items | `lionnotes strategy` |
@@ -135,7 +135,7 @@ Capture a speed thought (the core daily operation):
 - If pan-subject (no `-s`), appends to `_inbox/unsorted.md` for later triage
 - Each speed page (`speeds.md`) has frontmatter: `type: speeds`, `subject`, `entry_count`, `last_entry`
 - Each entry within the page follows the format: `- S[N]: (context: hint) content #thought/type`
-- Mapped entries are suffixed with `[→ POI-N]` (e.g., `[→ POI-07]`); unmapped entries have no suffix
+- Mapped entries are suffixed with `[→ POI-N]` (e.g., `[→ POI-07]`); unmapped entries have no suffix. This inline suffix is the sole marking mechanism — there is no separate `mapped` frontmatter field
 
 ### `lionnotes review`
 Interactive triage of unmapped speed thoughts:
@@ -144,8 +144,8 @@ Interactive triage of unmapped speed thoughts:
 - For each unmapped speed:
   - Show content, hint, context
   - Options: **map** (place on SMOC), **expand** (start a POI), **skip**, **archive**
-  - On map: add wikilink to subject's SMOC, mark `mapped: true`
-  - On expand: create new POI note, link from SMOC
+  - On map: add wikilink to subject's SMOC, mark speed with `[→ POI-N]` suffix
+  - On expand: create new POI note, link from SMOC, mark speed with `[→ POI-N]` suffix
 
 ### `lionnotes subjects`
 Manage the subject taxonomy:
@@ -408,7 +408,7 @@ expanded: false
 - `lionnotes map` — SMOC generation & viewing
 - `lionnotes poi` — POI creation
 - `lionnotes subjects pp` — Purpose & Principles
-- `lionnotes gsmoc` — GSMOC auto-generation
+- `lionnotes map` (no args) — GSMOC viewing/auto-generation (not a separate `gsmoc` command)
 - `lionnotes ref` — reference management
 
 ### Phase 4: Advanced Features
