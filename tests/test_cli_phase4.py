@@ -56,6 +56,7 @@ def mock_env(tmp_path):
         patch("lionnotes.maps._write_note"),
         patch("lionnotes.strategy._write_note"),
         patch("lionnotes.index._write_note"),
+        patch("lionnotes.alias._write_note"),
     ):
         yield config, obs
 
@@ -464,3 +465,151 @@ class TestIndexCommand:
         result = runner.invoke(app, ["index", "!!!"])
 
         assert result.exit_code == 1
+
+
+# -- alias command tests ----------------------------------------------------
+
+SAMPLE_GLOBAL_ALIASES = """\
+---
+type: aliases
+updated: "2026-01-01"
+---
+# Global Aliases
+
+<!-- Abbreviations used across subjects -->
+
+- **PP**: Purpose & Principles
+- **SMOC**: Subject Map of Contents
+"""
+
+SAMPLE_GLOSSARY = """\
+---
+type: glossary
+subject: "python"
+---
+# python — Glossary
+
+- **GIL**: Global Interpreter Lock
+"""
+
+EMPTY_GLOBAL_ALIASES = """\
+---
+type: aliases
+updated: "2026-01-01"
+---
+# Global Aliases
+
+<!-- Abbreviations used across subjects -->
+"""
+
+
+class TestAliasList:
+    def test_shows_global_aliases(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = SAMPLE_GLOBAL_ALIASES
+
+        result = runner.invoke(app, ["alias", "list"])
+
+        assert result.exit_code == 0
+        assert "Aliases (global, 2)" in result.output
+        assert "PP" in result.output
+        assert "SMOC" in result.output
+
+    def test_shows_subject_aliases(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = SAMPLE_GLOSSARY
+
+        result = runner.invoke(app, ["alias", "list", "-s", "python"])
+
+        assert result.exit_code == 0
+        assert "Aliases (python, 1)" in result.output
+        assert "GIL" in result.output
+
+    def test_empty_aliases(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = EMPTY_GLOBAL_ALIASES
+
+        result = runner.invoke(app, ["alias", "list"])
+
+        assert result.exit_code == 0
+        assert "No aliases (global)" in result.output
+
+    def test_obsidian_error(self, mock_env):
+        config, obs = mock_env
+        obs.read.side_effect = ObsidianCLIError(["read"], 1, "not found")
+
+        result = runner.invoke(app, ["alias", "list"])
+
+        assert result.exit_code == 1
+
+
+class TestAliasSet:
+    def test_sets_new_alias(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = SAMPLE_GLOBAL_ALIASES
+
+        result = runner.invoke(app, ["alias", "set", "POI", "Point of Interest"])
+
+        assert result.exit_code == 0
+        assert "Set alias (global)" in result.output
+        assert "POI" in result.output
+        assert "Point of Interest" in result.output
+        obs.append.assert_called_once()
+
+    def test_sets_subject_alias(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = SAMPLE_GLOSSARY
+
+        result = runner.invoke(
+            app,
+            ["alias", "set", "ABC", "Always Be Coding", "-s", "python"],
+        )
+
+        assert result.exit_code == 0
+        assert "Set alias (python)" in result.output
+
+    def test_updates_existing(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = SAMPLE_GLOBAL_ALIASES
+
+        result = runner.invoke(app, ["alias", "set", "PP", "Purpose and Principles"])
+
+        assert result.exit_code == 0
+        assert "Set alias (global)" in result.output
+
+
+class TestAliasRemove:
+    def test_removes_alias(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = SAMPLE_GLOBAL_ALIASES
+
+        result = runner.invoke(app, ["alias", "remove", "PP"])
+
+        assert result.exit_code == 0
+        assert "Removed alias (global)" in result.output
+        assert "PP" in result.output
+
+    def test_removes_subject_alias(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = SAMPLE_GLOSSARY
+
+        result = runner.invoke(app, ["alias", "remove", "GIL", "-s", "python"])
+
+        assert result.exit_code == 0
+        assert "Removed alias (python)" in result.output
+
+    def test_not_found(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = SAMPLE_GLOBAL_ALIASES
+
+        result = runner.invoke(app, ["alias", "remove", "XYZ"])
+
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+
+class TestAliasNoArgs:
+    def test_no_args_shows_help(self):
+        result = runner.invoke(app, ["alias"])
+        assert result.exit_code == 2
+        assert "Usage" in result.output
