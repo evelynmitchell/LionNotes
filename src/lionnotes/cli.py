@@ -538,8 +538,9 @@ def _max_entry_number(smoc, prefix: str) -> int:
     """Extract the max number from SMOC entries matching prefix."""
     max_num = 0
     for entry in smoc.all_entries:
-        if entry.link and f"{prefix}-" in entry.link:
-            parts = entry.link.split("-")
+        link = entry.link
+        if link and "/" not in link and link.startswith(f"{prefix}-"):
+            parts = link.split("-")
             if len(parts) >= 2:
                 with contextlib.suppress(ValueError):
                     max_num = max(max_num, int(parts[1]))

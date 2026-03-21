@@ -230,7 +230,8 @@ def update_smoc(
 
     if insert_idx is None:
         # Section not found — append to end of file
-        lines.append(f"\n### {section.title()}")
+        lines.append("")
+        lines.append(f"### {section.title()}")
         lines.append(poi_entry)
     else:
         lines.insert(insert_idx, poi_entry)
@@ -280,8 +281,16 @@ def _write_note(path: str, content: str, obsidian: ObsidianCLI) -> None:
             obsidian.rename(backup_name, path)
         raise
 
+    # Archive backup alongside the note: per-subject for subject notes,
+    # root _archive/ for top-level notes.
+    parts = path.split("/")
+    if len(parts) >= 2:
+        # e.g. "subject/SMOC" -> "subject/_archive/SMOC__lionnotes_bak_..."
+        archive_dest = f"{parts[0]}/_archive/{'/'.join(parts[1:])}__lionnotes_bak_{ts}"
+    else:
+        archive_dest = f"_archive/{backup_name}"
     with contextlib.suppress(ObsidianCLIError):
-        obsidian.rename(backup_name, f"_archive/{backup_name}")
+        obsidian.rename(backup_name, archive_dest)
 
 
 # -- GSMOC operations -------------------------------------------------------
@@ -373,12 +382,12 @@ def rebuild_smoc(subject: str, obsidian: ObsidianCLI) -> Smoc:
 
     # Scan for POI/REF files in the subject folder
     try:
-        search_results = obsidian.search(f"type: poi subject: {subject}")
+        search_results = obsidian.search(f"type: poi subject: {subject}", limit=1000)
     except ObsidianCLIError:
         search_results = ""
 
     try:
-        ref_results = obsidian.search(f"type: reference subject: {subject}")
+        ref_results = obsidian.search(f"type: reference subject: {subject}", limit=1000)
     except ObsidianCLIError:
         ref_results = ""
 
@@ -416,8 +425,12 @@ def rebuild_smoc(subject: str, obsidian: ObsidianCLI) -> Smoc:
     existing_links = smoc.all_links
 
     # Collect existing POI/REF links by note name
-    existing_pois = {link for link in existing_links if "POI-" in link}
-    existing_refs = {link for link in existing_links if "REF-" in link}
+    existing_pois = {
+        link for link in existing_links if "/" not in link and link.startswith("POI-")
+    }
+    existing_refs = {
+        link for link in existing_links if "/" not in link and link.startswith("REF-")
+    }
 
     # Find new entries not yet in SMOC
     new_pois = found_pois - existing_pois
