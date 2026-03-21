@@ -21,7 +21,7 @@ the book describes, modernized for digital use.
 | **Subject Map of Contents (SMOC)** | Auto-generated MOC notes per subject with wikilinks | `lionnotes map` |
 | **Grand Subject MOC (GSMOC)** | Root MOC note linking all subjects, auto-maintained | `lionnotes map` (no args) |
 | **Points of Interest (POI)** | Long-form notes within a subject, numbered & titled | `lionnotes poi` |
-| **Purpose & Principles (P&P)** | Frontmatter `includes`/`excludes` + boundary note per subject | `lionnotes pp` |
+| **Purpose & Principles (P&P)** | Frontmatter `includes`/`excludes` + boundary note per subject | `lionnotes subjects pp` |
 | **Subject Registry (GSR)** | Structured index of all subjects with metadata | `lionnotes subjects` |
 | **Caches / Binders** | Vault folders: carry-about, common-store, archive | `lionnotes cache` |
 | **Speed→Map→POI flow** | Review workflow: triage speeds, place on maps, expand to POIs | `lionnotes review` |
