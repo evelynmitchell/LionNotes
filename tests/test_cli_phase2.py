@@ -52,7 +52,8 @@ class TestCaptureCommand:
         config, obs = mock_env
         obs.read.return_value = "# speeds"
         result = runner.invoke(
-            app, ["capture", "A thought", "-s", "My Topic"],
+            app,
+            ["capture", "A thought", "-s", "My Topic"],
         )
         assert result.exit_code == 0
         assert "Captured to my-topic" in result.output
@@ -62,8 +63,16 @@ class TestCaptureCommand:
         obs.read.return_value = "# speeds"
         result = runner.invoke(
             app,
-            ["capture", "A thought", "-s", "my-topic",
-             "-h", "work", "-t", "observation"],
+            [
+                "capture",
+                "A thought",
+                "-s",
+                "my-topic",
+                "-h",
+                "work",
+                "-t",
+                "observation",
+            ],
         )
         assert result.exit_code == 0
         assert "context: work" in result.output
@@ -136,11 +145,11 @@ class TestSearchCommand:
     def test_search_with_subject_filter(self, mock_env):
         config, obs = mock_env
         obs.search.return_value = (
-            "alpha/speeds.md: S1: A thought\n"
-            "beta/speeds.md: S2: Another thought\n"
+            "alpha/speeds.md: S1: A thought\nbeta/speeds.md: S2: Another thought\n"
         )
         result = runner.invoke(
-            app, ["search", "thought", "-s", "alpha"],
+            app,
+            ["search", "thought", "-s", "alpha"],
         )
         assert result.exit_code == 0
         assert "alpha" in result.output
@@ -149,11 +158,10 @@ class TestSearchCommand:
     def test_search_subject_filter_uses_segments(self, mock_env):
         """Ensure filtering matches path segments, not substrings."""
         config, obs = mock_env
-        obs.search.return_value = (
-            "alphabeta/speeds.md: S1: A thought\n"
-        )
+        obs.search.return_value = "alphabeta/speeds.md: S1: A thought\n"
         result = runner.invoke(
-            app, ["search", "thought", "-s", "alpha"],
+            app,
+            ["search", "thought", "-s", "alpha"],
         )
         assert result.exit_code == 0
         assert "No results found in subject" in result.output
@@ -161,11 +169,10 @@ class TestSearchCommand:
     def test_search_context_uses_search_context(self, mock_env):
         """--context flag should call search_context, not search."""
         config, obs = mock_env
-        obs.search_context.return_value = (
-            "my-topic/speeds.md: S1: A thought\n"
-        )
+        obs.search_context.return_value = "my-topic/speeds.md: S1: A thought\n"
         result = runner.invoke(
-            app, ["search", "thought", "--context"],
+            app,
+            ["search", "thought", "--context"],
         )
         assert result.exit_code == 0
         obs.search_context.assert_called_once()

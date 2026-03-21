@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import re
 import sys
 from pathlib import Path
 
@@ -16,11 +18,23 @@ from lionnotes.config import (
     load_config,
     save_config,
 )
+from lionnotes.maps import (
+    MapError,
+    read_gsmoc,
+    read_smoc,
+    rebuild_smoc,
+    update_smoc,
+)
 from lionnotes.obsidian import (
     ObsidianCLI,
     ObsidianCLIError,
     ObsidianNotFoundError,
     ObsidianNotRunningError,
+)
+from lionnotes.review import (
+    ReviewError,
+    get_unmapped_speeds,
+    triage_inbox,
 )
 from lionnotes.subjects import (
     SubjectError,
@@ -375,12 +389,14 @@ def capture(
 
     try:
         # Normalize subject for display (capture_speed also normalizes)
-        display_subject = (
-            normalize_subject_name(subject) if subject else None
-        )
+        display_subject = normalize_subject_name(subject) if subject else None
         entry = capture_speed(
-            content, obsidian, config,
-            subject=subject, hint=hint, thought_type=thought_type,
+            content,
+            obsidian,
+            config,
+            subject=subject,
+            hint=hint,
+            thought_type=thought_type,
         )
         target = display_subject or "inbox"
         typer.echo(f"Captured to {target}: {entry}")
@@ -392,7 +408,9 @@ def capture(
 # -- subjects ---------------------------------------------------------------
 
 subjects_app = typer.Typer(
-    name="subjects", help="Manage subjects.", no_args_is_help=True,
+    name="subjects",
+    help="Manage subjects.",
+    no_args_is_help=True,
 )
 app.add_typer(subjects_app)
 
@@ -406,8 +424,7 @@ def subjects_list():
     subjects = list_subjects(obsidian)
     if not subjects:
         typer.echo(
-            "No subjects found. Create one with"
-            " 'lionnotes subjects create NAME'."
+            "No subjects found. Create one with 'lionnotes subjects create NAME'."
         )
         return
 
@@ -445,9 +462,7 @@ def search(
     subject: str | None = typer.Option(
         None, "--subject", "-s", help="Scope search to a subject folder."
     ),
-    context: bool = typer.Option(
-        False, "--context", help="Show surrounding content."
-    ),
+    context: bool = typer.Option(False, "--context", help="Show surrounding content."),
     speeds_only: bool = typer.Option(
         False, "--speeds-only", help="Only search speed notes."
     ),
@@ -489,13 +504,263 @@ def search(
                 if normalized_subj in segments:
                     filtered_lines.append(line)
             if not filtered_lines:
-                typer.echo(
-                    f"No results found in subject '{subject}'."
-                )
+                typer.echo(f"No results found in subject '{subject}'.")
                 return
             typer.echo("\n".join(filtered_lines))
         else:
             typer.echo(results.strip())
     except ObsidianCLIError as exc:
         typer.echo(f"Search error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- poi --------------------------------------------------------------------
+
+
+def _slugify(text: str) -> str:
+    """Sanitize text for use in filenames — only [a-z0-9-] allowed."""
+    slug = text.strip().lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    slug = slug.strip("-")
+    # Collapse multiple dashes
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug or "untitled"
+
+
+def _escape_yaml(value: str) -> str:
+    """Escape a string for safe embedding in YAML frontmatter."""
+    # Replace characters that could break YAML double-quoted strings
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
+def _max_entry_number(smoc, prefix: str) -> int:
+    """Extract the max number from SMOC entries matching prefix."""
+    max_num = 0
+    for entry in smoc.all_entries:
+        link = entry.link
+        if link and "/" not in link and link.startswith(f"{prefix}-"):
+            parts = link.split("-")
+            if len(parts) >= 2:
+                with contextlib.suppress(ValueError):
+                    max_num = max(max_num, int(parts[1]))
+    return max_num
+
+
+def _next_poi_number(subject: str, obsidian: ObsidianCLI) -> int:
+    """Determine the next POI number for a subject."""
+    return _max_entry_number(read_smoc(subject, obsidian), "POI") + 1
+
+
+def _next_ref_number(subject: str, obsidian: ObsidianCLI) -> int:
+    """Determine the next REF number for a subject."""
+    return _max_entry_number(read_smoc(subject, obsidian), "REF") + 1
+
+
+@app.command()
+def poi(
+    subject: str = typer.Argument(..., help="Target subject."),
+    title: str = typer.Argument(..., help="POI title."),
+):
+    """Create a numbered Point of Interest note and link it from the SMOC."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        normalized = normalize_subject_name(subject)
+        poi_num = _next_poi_number(normalized, obsidian)
+        poi_num_str = f"{poi_num:02d}"
+
+        safe_title = _slugify(title)
+
+        note_name = f"{normalized}/POI-{poi_num_str}-{safe_title}"
+        content = render(
+            "poi",
+            subject=normalized,
+            poi_number=poi_num,
+            title=_escape_yaml(title),
+        )
+        obsidian.create(note_name, content=content)
+
+        # Auto-link from SMOC
+        smoc_entry = f"- [[POI-{poi_num_str}-{safe_title}]]"
+        update_smoc(normalized, smoc_entry, obsidian)
+
+        typer.echo(f"Created {note_name}")
+        typer.echo(f"  Linked in {normalized}/SMOC")
+    except (SubjectError, MapError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- ref --------------------------------------------------------------------
+
+
+@app.command()
+def ref(
+    subject: str = typer.Argument(..., help="Target subject."),
+    title: str = typer.Argument(..., help="Reference title."),
+    url: str = typer.Option("", "--url", help="Source URL."),
+    author: str = typer.Option("", "--author", help="Author name."),
+    year: str = typer.Option("", "--year", help="Publication year."),
+    notes: str | None = typer.Option(
+        None,
+        "--notes",
+        help="Initial notes to add.",
+    ),
+):
+    """Create a numbered Reference note and link it from the SMOC."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        normalized = normalize_subject_name(subject)
+        ref_num = _next_ref_number(normalized, obsidian)
+        ref_num_str = f"{ref_num:02d}"
+
+        safe_title = _slugify(title)
+
+        note_name = f"{normalized}/REF-{ref_num_str}-{safe_title}"
+        content = render(
+            "reference",
+            subject=normalized,
+            ref_number=ref_num,
+            title=_escape_yaml(title),
+            author=_escape_yaml(author or "Unknown"),
+            year=_escape_yaml(year or "n.d."),
+            url=_escape_yaml(url),
+        )
+        if notes:
+            content = content.replace(
+                "<!-- Annotations and key takeaways -->",
+                notes,
+            )
+        obsidian.create(note_name, content=content)
+
+        # Auto-link from SMOC References section
+        smoc_entry = f"- [[REF-{ref_num_str}-{safe_title}]]"
+        update_smoc(normalized, smoc_entry, obsidian, section="references")
+
+        typer.echo(f"Created {note_name}")
+        typer.echo(f"  Linked in {normalized}/SMOC")
+    except (SubjectError, MapError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- map --------------------------------------------------------------------
+
+
+@app.command("map")
+def map_cmd(
+    subject: str | None = typer.Argument(
+        None,
+        help="Subject to view SMOC for (omit for GSMOC).",
+    ),
+    rebuild: bool = typer.Option(
+        False,
+        "--rebuild",
+        help="Rebuild SMOC from vault contents.",
+    ),
+):
+    """View a subject's SMOC or the Grand SMOC."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        if subject:
+            normalized = normalize_subject_name(subject)
+            if rebuild:
+                rebuild_smoc(normalized, obsidian)
+                typer.echo(f"Rebuilt SMOC for {normalized}.")
+            smoc = read_smoc(normalized, obsidian)
+            typer.echo(smoc.raw.strip())
+        else:
+            gsmoc = read_gsmoc(obsidian)
+            typer.echo(gsmoc.raw.strip())
+    except (SubjectError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- review -----------------------------------------------------------------
+
+
+@app.command()
+def review(
+    subject: str | None = typer.Option(
+        None,
+        "--subject",
+        "-s",
+        help="Subject to review unmapped speeds for.",
+    ),
+    pan: bool = typer.Option(
+        False,
+        "--pan",
+        help="Show inbox entries for triage.",
+    ),
+):
+    """Review unmapped speed thoughts for triage."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        if pan:
+            entries = triage_inbox(obsidian)
+            if not entries:
+                typer.echo("Inbox is empty.")
+                return
+            typer.echo(f"Inbox entries ({len(entries)}):")
+            for e in entries:
+                ctx = f" (context: {e.context})" if e.context else ""
+                tag = f" {e.thought_type}" if e.thought_type else ""
+                typer.echo(f"  S{e.number}:{ctx} {e.content}{tag}")
+        elif subject:
+            normalized = normalize_subject_name(subject)
+            entries = get_unmapped_speeds(normalized, obsidian)
+            if not entries:
+                typer.echo(f"No unmapped speeds in {normalized}.")
+                return
+            typer.echo(f"Unmapped speeds in {normalized} ({len(entries)}):")
+            for e in entries:
+                ctx = f" (context: {e.context})" if e.context else ""
+                tag = f" {e.thought_type}" if e.thought_type else ""
+                typer.echo(f"  S{e.number}:{ctx} {e.content}{tag}")
+        else:
+            typer.echo(
+                "Specify --subject/-s for a subject or --pan for inbox.",
+                err=True,
+            )
+            raise typer.Exit(1)
+    except (SubjectError, ReviewError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- subjects pp ------------------------------------------------------------
+
+
+@subjects_app.command("pp")
+def subjects_pp(
+    name: str = typer.Argument(..., help="Subject name."),
+):
+    """View a subject's Purpose & Principles."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        normalized = normalize_subject_name(name)
+        content = obsidian.read(f"{normalized}/purpose")
+        typer.echo(content.strip())
+    except ObsidianCLIError as exc:
+        if exc.is_not_found:
+            typer.echo(
+                f"Error: Purpose & Principles not found for '{name}'.",
+                err=True,
+            )
+        else:
+            typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+    except SubjectError as exc:
+        typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None

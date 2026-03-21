@@ -27,7 +27,10 @@ class TestFormatSpeedEntry:
 
     def test_with_hint_and_type(self):
         result = _format_speed_entry(
-            10, "A thought", hint="work", thought_type="question",
+            10,
+            "A thought",
+            hint="work",
+            thought_type="question",
         )
         assert result == "- S10: (context: work) A thought #thought/question"
 
@@ -43,12 +46,22 @@ class TestFormatSpeedEntry:
         """'#' or 'thought/' normalizes to empty — no tag appended."""
         expected = "- S1: A thought"
         assert _format_speed_entry(1, "A thought", thought_type="#") == expected
-        assert _format_speed_entry(
-            1, "A thought", thought_type="thought/",
-        ) == expected
-        assert _format_speed_entry(
-            1, "A thought", thought_type="# ",
-        ) == expected
+        assert (
+            _format_speed_entry(
+                1,
+                "A thought",
+                thought_type="thought/",
+            )
+            == expected
+        )
+        assert (
+            _format_speed_entry(
+                1,
+                "A thought",
+                thought_type="# ",
+            )
+            == expected
+        )
 
 
 class TestCaptureSpeed:
@@ -102,8 +115,12 @@ class TestCaptureSpeed:
         config = self._make_config(tmp_path)
 
         entry = capture_speed(
-            "My thought", obs, config,
-            subject="my-topic", hint="work", thought_type="observation"
+            "My thought",
+            obs,
+            config,
+            subject="my-topic",
+            hint="work",
+            thought_type="observation",
         )
 
         assert "(context: work)" in entry
@@ -132,7 +149,10 @@ class TestCaptureSpeed:
 
         with pytest.raises(SubjectError, match="missing its speeds"):
             capture_speed(
-                "A thought", obs, config, subject="my-topic",
+                "A thought",
+                obs,
+                config,
+                subject="my-topic",
             )
 
     def test_empty_content_raises(self, tmp_path):
@@ -155,7 +175,10 @@ class TestCaptureSpeed:
         config = self._make_config(tmp_path)
 
         entry = capture_speed(
-            "A thought", obs, config, subject="My Topic",
+            "A thought",
+            obs,
+            config,
+            subject="My Topic",
         )
 
         assert entry == "- S1: A thought"
@@ -166,7 +189,9 @@ class TestCaptureSpeed:
     def test_reraises_non_not_found_errors(self, tmp_path):
         obs = MagicMock()
         obs.read.side_effect = ObsidianCLIError(
-            ["read"], -1, "Command timed out",
+            ["read"],
+            -1,
+            "Command timed out",
         )
         config = self._make_config(tmp_path)
 

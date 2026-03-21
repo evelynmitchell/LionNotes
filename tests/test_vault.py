@@ -42,7 +42,9 @@ class TestSubjectExists:
 
         obs = _make_obsidian()
         obs.read.side_effect = ObsidianCLIError(
-            ["read"], -1, "Command timed out",
+            ["read"],
+            -1,
+            "Command timed out",
         )
         with pytest.raises(ObsidianCLIError, match="timed out"):
             subject_exists("my-subject", obs)
@@ -59,7 +61,9 @@ class TestCountUnmappedSpeeds:
 
         obs = _make_obsidian()
         obs.read.side_effect = ObsidianCLIError(
-            ["read"], -1, "Command timed out",
+            ["read"],
+            -1,
+            "Command timed out",
         )
         with pytest.raises(ObsidianCLIError, match="timed out"):
             count_unmapped_speeds("my-subject", obs)
@@ -89,17 +93,13 @@ class TestCountUnmappedSpeeds:
     def test_all_mapped(self):
         obs = _make_obsidian()
         obs.read.return_value = (
-            "- S1: thought one [→ POI-01]\n"
-            "- S2: thought two [→ POI-02]\n"
+            "- S1: thought one [→ POI-01]\n- S2: thought two [→ POI-02]\n"
         )
         assert count_unmapped_speeds("my-subject", obs) == 0
 
     def test_ignores_non_speed_lines(self):
         obs = _make_obsidian()
         obs.read.return_value = (
-            "# Title\n"
-            "Some text\n"
-            "- Not a speed entry\n"
-            "- S1: Actual speed\n"
+            "# Title\nSome text\n- Not a speed entry\n- S1: Actual speed\n"
         )
         assert count_unmapped_speeds("my-subject", obs) == 1
