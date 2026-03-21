@@ -36,6 +36,12 @@ from lionnotes.review import (
     get_unmapped_speeds,
     triage_inbox,
 )
+from lionnotes.strategy import (
+    StrategyError,
+    add_priority,
+    complete_priority,
+    list_priorities,
+)
 from lionnotes.subjects import (
     SubjectError,
     create_subject,
@@ -762,5 +768,72 @@ def subjects_pp(
             typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
     except SubjectError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- strategy ---------------------------------------------------------------
+
+strategy_app = typer.Typer(
+    name="strategy",
+    help="Manage active priorities.",
+    no_args_is_help=True,
+)
+app.add_typer(strategy_app)
+
+
+@strategy_app.command("list")
+def strategy_list():
+    """Display active priorities."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        items = list_priorities(obsidian)
+        if not items:
+            typer.echo("No active priorities.")
+            return
+        typer.echo(f"Active priorities ({len(items)}):")
+        for item in items:
+            typer.echo(f"  {item.number}. [{item.subject}] {item.description}")
+    except ObsidianCLIError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+@strategy_app.command("add")
+def strategy_add(
+    subject: str = typer.Argument(..., help="Subject this priority relates to."),
+    description: str = typer.Argument(..., help="Priority description."),
+):
+    """Add a new active priority."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        item = add_priority(subject, description, obsidian)
+        typer.echo(
+            f"Added priority #{item.number}: [{item.subject}] {item.description}"
+        )
+    except (StrategyError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+@strategy_app.command("done")
+def strategy_done(
+    item: int = typer.Argument(..., help="Priority number to complete."),
+):
+    """Mark a priority as done (removes it from the list)."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        removed = complete_priority(item, obsidian)
+        typer.echo(
+            f"Completed priority #{removed.number}: "
+            f"[{removed.subject}] {removed.description}"
+        )
+    except (StrategyError, ObsidianCLIError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
