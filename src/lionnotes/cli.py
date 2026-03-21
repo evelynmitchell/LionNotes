@@ -26,6 +26,7 @@ from lionnotes.config import (
     load_config,
     save_config,
 )
+from lionnotes.index import IndexBuildError, build_index
 from lionnotes.maps import (
     MapError,
     read_gsmoc,
@@ -983,5 +984,26 @@ def cache_set(
         normalized = normalize_subject_name(subject)
         typer.echo(f"Set {normalized} to {tier}")
     except (CacheError, SubjectError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+# -- index ------------------------------------------------------------------
+
+
+@app.command("index")
+def index_cmd(
+    subject: str = typer.Argument(..., help="Subject to build index for."),
+):
+    """Build or rebuild the keyword index for a subject."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        normalized = normalize_subject_name(subject)
+        build_index(normalized, obsidian)
+        typer.echo(f"Built index for {normalized}")
+        typer.echo(f"  + {normalized}/Index")
+    except (IndexBuildError, SubjectError, ObsidianCLIError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
