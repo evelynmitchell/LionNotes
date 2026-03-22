@@ -61,7 +61,10 @@ from lionnotes.subjects import (
     SubjectError,
     create_subject,
     list_subjects,
+    merge_subjects,
     normalize_subject_name,
+    promote_subject,
+    split_subject,
 )
 from lionnotes.templates import render
 
@@ -493,6 +496,100 @@ def subjects_create(
         typer.echo(f"  + {normalized}/speeds")
         typer.echo(f"  + {normalized}/glossary")
     except SubjectError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+@subjects_app.command("merge")
+def subjects_merge(
+    source: str = typer.Argument(..., help="Source subject to merge from."),
+    target: str = typer.Argument(..., help="Target subject to merge into."),
+):
+    """Merge one subject into another."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        result = merge_subjects(source, target, obsidian, config)
+        normalized_target = normalize_subject_name(target)
+        if result.moved:
+            typer.echo(f"Merged into {normalized_target}:")
+            for note in result.moved:
+                typer.echo(f"  + {note}")
+        if result.failed:
+            typer.echo("Failed to move:")
+            for f in result.failed:
+                typer.echo(f"  ! {f.note}: {f.reason}")
+        if result.skipped:
+            typer.echo("Skipped:")
+            for s in result.skipped:
+                typer.echo(f"  - {s}")
+        if result.out_card_created:
+            normalized_source = normalize_subject_name(source)
+            typer.echo(f"Out card created at {normalized_source}/SMOC")
+        if not result.moved and not result.failed:
+            typer.echo("No notes to merge.")
+        if result.failed:
+            raise typer.Exit(1)
+    except (SubjectError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+@subjects_app.command("split")
+def subjects_split(
+    source: str = typer.Argument(..., help="Source subject to split."),
+    into: str = typer.Option(..., "--into", help="Name for the new subject."),
+    notes: str = typer.Option(
+        ...,
+        "--notes",
+        help="Comma-separated note patterns to move (e.g. POI-01,REF-01).",
+    ),
+):
+    """Split notes from a subject into a new subject."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    note_patterns = [n.strip() for n in notes.split(",") if n.strip()]
+    if not note_patterns:
+        typer.echo("Error: No note patterns provided.", err=True)
+        raise typer.Exit(1)
+
+    try:
+        result = split_subject(source, into, note_patterns, obsidian, config)
+        typer.echo(f"Split into {result.new_subject}:")
+        if result.moved:
+            for note in result.moved:
+                typer.echo(f"  + {note}")
+        if result.failed:
+            typer.echo("Failed to move:")
+            for f in result.failed:
+                typer.echo(f"  ! {f.note}: {f.reason}")
+        if not result.moved and not result.failed:
+            typer.echo("  No notes moved.")
+        if result.failed:
+            raise typer.Exit(1)
+    except (SubjectError, ObsidianCLIError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
+@subjects_app.command("promote")
+def subjects_promote(
+    name: str = typer.Argument(..., help="Name for the new subject."),
+):
+    """Promote a proto-subject from inbox to a full subject."""
+    config = _resolve_config()
+    obsidian = _resolve_obsidian(config)
+
+    try:
+        normalized = promote_subject(name, obsidian, config)
+        typer.echo(f"Promoted to full subject: {normalized}")
+        typer.echo(f"  + {normalized}/SMOC")
+        typer.echo(f"  + {normalized}/purpose")
+        typer.echo(f"  + {normalized}/speeds")
+        typer.echo(f"  + {normalized}/glossary")
+    except (SubjectError, ObsidianCLIError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
 

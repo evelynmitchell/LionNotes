@@ -613,3 +613,255 @@ class TestAliasNoArgs:
         result = runner.invoke(app, ["alias"])
         assert result.exit_code == 2
         assert "Usage" in result.output
+
+
+# -- subjects merge/split/promote CLI tests ---------------------------------
+
+SAMPLE_SOURCE_SMOC = """\
+---
+type: smoc
+subject: "source"
+version: 1
+created: "2026-01-01"
+updated: "2026-01-01"
+---
+# source — Subject Map of Contents
+
+## Purpose & Principles
+- [[purpose]]
+
+## Map
+
+### Core
+- [[POI-01-alpha]]
+
+### Peripheral
+
+### References
+- [[REF-01-gamma]]
+
+## Speed Thoughts
+- Current speed page: [[speeds]]
+
+## See Also
+"""
+
+SAMPLE_TARGET_SMOC = """\
+---
+type: smoc
+subject: "target"
+version: 1
+created: "2026-01-01"
+updated: "2026-01-01"
+---
+# target — Subject Map of Contents
+
+## Purpose & Principles
+- [[purpose]]
+
+## Map
+
+### Core
+- [[POI-01-existing]]
+
+### Peripheral
+
+### References
+
+## Speed Thoughts
+- Current speed page: [[speeds]]
+
+## See Also
+"""
+
+SAMPLE_GSMOC = """\
+---
+type: gsmoc
+version: 1
+created: "2026-01-01"
+updated: "2026-01-01"
+---
+# Grand Subject Map of Contents
+
+## Active Subjects
+- [[source/SMOC|source]]
+- [[target/SMOC|target]]
+
+## Dormant Subjects
+
+## Emerging
+
+## Cross-Subject Connections
+"""
+
+SAMPLE_INBOX_FOR_PROMOTE = """\
+---
+type: inbox
+created: "2026-01-01"
+---
+# Unsorted Speed Thoughts
+
+- S1: (context: python) decorators are cool #thought/observation
+- S2: random thought
+"""
+
+
+class TestSubjectsMerge:
+    def test_merge_success(self, mock_env):
+        config, obs = mock_env
+
+        def read_side(path):
+            if path == "source/SMOC":
+                return SAMPLE_SOURCE_SMOC
+            if path == "target/SMOC":
+                return SAMPLE_TARGET_SMOC
+            if path == "GSMOC":
+                return SAMPLE_GSMOC
+            raise ObsidianCLIError(["read"], 1, "not found")
+
+        obs.read.side_effect = read_side
+
+        result = runner.invoke(app, ["subjects", "merge", "source", "target"])
+
+        assert result.exit_code == 0
+        assert "Merged into target" in result.output
+
+    def test_merge_source_not_found(self, mock_env):
+        config, obs = mock_env
+        obs.read.side_effect = ObsidianCLIError(["read"], 1, "not found")
+
+        result = runner.invoke(app, ["subjects", "merge", "missing", "target"])
+
+        assert result.exit_code == 1
+        assert "does not exist" in result.output
+
+    def test_merge_self(self, mock_env):
+        config, obs = mock_env
+
+        result = runner.invoke(app, ["subjects", "merge", "alpha", "alpha"])
+
+        assert result.exit_code == 1
+        assert "into itself" in result.output
+
+
+class TestSubjectsSplit:
+    def test_split_success(self, mock_env):
+        config, obs = mock_env
+
+        def read_side(path):
+            if path == "source/SMOC":
+                return SAMPLE_SOURCE_SMOC
+            if path == "new-topic/SMOC":
+                raise ObsidianCLIError(["read"], 1, "not found")
+            if path == "GSMOC":
+                return SAMPLE_GSMOC
+            raise ObsidianCLIError(["read"], 1, "not found")
+
+        obs.read.side_effect = read_side
+
+        result = runner.invoke(
+            app,
+            [
+                "subjects",
+                "split",
+                "source",
+                "--into",
+                "new-topic",
+                "--notes",
+                "POI-01",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Split into new-topic" in result.output
+
+    def test_split_invalid_name(self, mock_env):
+        config, obs = mock_env
+
+        result = runner.invoke(
+            app,
+            [
+                "subjects",
+                "split",
+                "source",
+                "--into",
+                "_inbox",
+                "--notes",
+                "POI-01",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "reserved" in result.output
+
+    def test_split_no_match(self, mock_env):
+        config, obs = mock_env
+
+        def read_side(path):
+            if path == "source/SMOC":
+                return SAMPLE_SOURCE_SMOC
+            if path == "new-topic/SMOC":
+                raise ObsidianCLIError(["read"], 1, "not found")
+            raise ObsidianCLIError(["read"], 1, "not found")
+
+        obs.read.side_effect = read_side
+
+        result = runner.invoke(
+            app,
+            [
+                "subjects",
+                "split",
+                "source",
+                "--into",
+                "new-topic",
+                "--notes",
+                "NONEXISTENT",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "No notes matched" in result.output
+
+
+class TestSubjectsPromote:
+    def test_promote_success(self, mock_env):
+        config, obs = mock_env
+
+        def read_side(path):
+            if path == "python/SMOC":
+                raise ObsidianCLIError(["read"], 1, "not found")
+            if path == "_inbox/unsorted":
+                return SAMPLE_INBOX_FOR_PROMOTE
+            if path == "GSMOC":
+                return SAMPLE_GSMOC
+            raise ObsidianCLIError(["read"], 1, "not found")
+
+        obs.read.side_effect = read_side
+
+        result = runner.invoke(app, ["subjects", "promote", "python"])
+
+        assert result.exit_code == 0
+        assert "Promoted to full subject: python" in result.output
+        assert "python/SMOC" in result.output
+
+    def test_promote_reserved_name(self, mock_env):
+        config, obs = mock_env
+
+        result = runner.invoke(app, ["subjects", "promote", "_inbox"])
+
+        assert result.exit_code == 1
+        assert "reserved" in result.output
+
+    def test_promote_existing_subject(self, mock_env):
+        config, obs = mock_env
+        obs.read.return_value = "# existing"
+
+        result = runner.invoke(app, ["subjects", "promote", "existing"])
+
+        assert result.exit_code == 1
+        assert "already exists" in result.output
+
+    def test_subjects_no_args_shows_help(self):
+        result = runner.invoke(app, ["subjects"])
+        assert result.exit_code == 2
+        assert "Usage" in result.output
