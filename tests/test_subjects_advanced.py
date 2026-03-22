@@ -181,6 +181,7 @@ class TestMergeSubjects:
         with (
             patch("lionnotes.subjects.save_config"),
             patch("lionnotes.maps._write_note"),
+            patch("lionnotes.maps.update_smoc"),
         ):
             result = merge_subjects("source", "target", obs, mock_config)
 
@@ -247,6 +248,7 @@ class TestMergeSubjects:
         with (
             patch("lionnotes.subjects.save_config"),
             patch("lionnotes.maps._write_note"),
+            patch("lionnotes.maps.update_smoc"),
         ):
             result = merge_subjects("source", "target", obs, mock_config)
 
@@ -271,6 +273,7 @@ class TestMergeSubjects:
         with (
             patch("lionnotes.subjects.save_config"),
             patch("lionnotes.maps._write_note"),
+            patch("lionnotes.maps.update_smoc"),
         ):
             result = merge_subjects("empty", "target", obs, mock_config)
 
@@ -297,6 +300,7 @@ class TestMergeSubjects:
         with (
             patch("lionnotes.subjects.save_config"),
             patch("lionnotes.maps._write_note"),
+            patch("lionnotes.maps.update_smoc"),
         ):
             merge_subjects("source", "target", obs, mock_config)
 
@@ -325,6 +329,8 @@ class TestSplitSubject:
         with (
             patch("lionnotes.subjects.save_config"),
             patch("lionnotes.maps._write_note"),
+            patch("lionnotes.maps.update_smoc"),
+            patch("lionnotes.maps._update_frontmatter_date", side_effect=lambda c: c),
         ):
             result = split_subject(
                 "source",
@@ -436,6 +442,8 @@ class TestSplitSubject:
         with (
             patch("lionnotes.subjects.save_config"),
             patch("lionnotes.maps._write_note"),
+            patch("lionnotes.maps.update_smoc"),
+            patch("lionnotes.maps._update_frontmatter_date", side_effect=lambda c: c),
         ):
             result = split_subject(
                 "source",

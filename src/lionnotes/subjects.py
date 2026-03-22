@@ -219,6 +219,7 @@ def merge_subjects(
         _write_note,
         read_gsmoc,
         update_gsmoc,
+        update_smoc,
     )
 
     source = normalize_subject_name(source)
@@ -278,42 +279,47 @@ def merge_subjects(
     try:
         source_speeds = obsidian.read(f"{source}/speeds")
         speed_lines = []
+        kept_lines = []
         target_speed_num = config.speed_counters.get(target, 0)
         for line in source_speeds.splitlines():
             m = _SPEED_LINE_RE.match(line.strip())
             if m:
                 target_speed_num += 1
-                # Replace speed number
                 new_line = re.sub(
                     r"^- S\d+:",
                     f"- S{target_speed_num}:",
                     line.strip(),
                 )
                 speed_lines.append(new_line)
+            else:
+                kept_lines.append(line)
         if speed_lines:
             obsidian.append(
                 f"{target}/speeds",
                 "\n" + "\n".join(speed_lines),
             )
             config.speed_counters[target] = target_speed_num
-    except ObsidianCLIError:
-        pass  # No speeds to move
+            # Remove moved speeds from source
+            _write_note(
+                f"{source}/speeds",
+                "\n".join(kept_lines),
+                obsidian,
+            )
+    except ObsidianCLIError as exc:
+        if not exc.is_not_found:
+            raise  # Re-raise real errors
 
     # -- Finalize: update target SMOC with moved entries --
-    try:
-        target_smoc_content = obsidian.read(f"{target}/SMOC")
-        new_entries = []
-        for tgt_note in result.moved:
-            entry_line = f"- [[{tgt_note}]]"
-            if entry_line not in target_smoc_content:
-                new_entries.append(entry_line)
-        if new_entries:
-            obsidian.append(
-                f"{target}/SMOC",
-                "\n" + "\n".join(new_entries),
+    for tgt_note in result.moved:
+        m = _NOTE_PREFIX_RE.match(tgt_note)
+        section = "references" if m and m.group(1) == "REF" else "core"
+        with contextlib.suppress(ObsidianCLIError):
+            update_smoc(
+                target,
+                f"- [[{tgt_note}]]",
+                obsidian,
+                section=section,
             )
-    except ObsidianCLIError:
-        pass
 
     # -- Create out card at source SMOC --
     try:
@@ -369,7 +375,7 @@ def split_subject(
 
     Uses plan-execute-report pattern.
     """
-    from lionnotes.maps import read_smoc, update_gsmoc
+    from lionnotes.maps import update_gsmoc, update_smoc
 
     source = normalize_subject_name(source)
     new_name = normalize_subject_name(new_name)
@@ -410,6 +416,7 @@ def split_subject(
     create_subject(new_name, obsidian, config)
 
     result = SplitResult(new_subject=new_name)
+    moved_originals: list[str] = []
 
     # -- Execute: move matched notes --
     next_poi = 1
@@ -428,23 +435,38 @@ def split_subject(
         try:
             obsidian.rename(f"{source}/{note}", f"{new_name}/{new_note}")
             result.moved.append(new_note)
+            moved_originals.append(note)
         except ObsidianCLIError as exc:
             result.failed.append(MoveFailure(note=note, reason=str(exc)))
 
     # -- Finalize: update new subject SMOC --
-    if result.moved:
+    for note in result.moved:
+        m_note = _NOTE_PREFIX_RE.match(note)
+        section = "references" if m_note and m_note.group(1) == "REF" else "core"
+        with contextlib.suppress(ObsidianCLIError):
+            update_smoc(
+                new_name,
+                f"- [[{note}]]",
+                obsidian,
+                section=section,
+            )
+
+    # -- Update source SMOC: remove moved entries --
+    if moved_originals:
+        from lionnotes.maps import _update_frontmatter_date, _write_note
+
         try:
-            smoc = read_smoc(new_name, obsidian)
-            new_entries = []
-            for note in result.moved:
-                entry = f"- [[{note}]]"
-                if entry not in smoc.raw:
-                    new_entries.append(entry)
-            if new_entries:
-                obsidian.append(
-                    f"{new_name}/SMOC",
-                    "\n" + "\n".join(new_entries),
+            source_smoc = obsidian.read(f"{source}/SMOC")
+            lines = source_smoc.splitlines()
+            filtered = [
+                line
+                for line in lines
+                if not any(
+                    f"[[{orig}]]" in line for orig in moved_originals
                 )
+            ]
+            new_content = _update_frontmatter_date("\n".join(filtered))
+            _write_note(f"{source}/SMOC", new_content, obsidian)
         except ObsidianCLIError:
             pass
 
@@ -482,7 +504,9 @@ def promote_subject(
     # Move matching inbox entries
     try:
         inbox_content = obsidian.read("_inbox/unsorted")
-    except ObsidianCLIError:
+    except ObsidianCLIError as exc:
+        if not exc.is_not_found:
+            raise  # Re-raise real errors (permissions, timeouts)
         # No inbox — just create the subject
         with contextlib.suppress(ObsidianCLIError):
             update_gsmoc(

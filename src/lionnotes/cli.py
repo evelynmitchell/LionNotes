@@ -529,6 +529,8 @@ def subjects_merge(
             typer.echo(f"Out card created at {normalized_source}/SMOC")
         if not result.moved and not result.failed:
             typer.echo("No notes to merge.")
+        if result.failed:
+            raise typer.Exit(1)
     except (SubjectError, ObsidianCLIError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
@@ -565,6 +567,8 @@ def subjects_split(
                 typer.echo(f"  ! {f.note}: {f.reason}")
         if not result.moved and not result.failed:
             typer.echo("  No notes moved.")
+        if result.failed:
+            raise typer.Exit(1)
     except (SubjectError, ObsidianCLIError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
